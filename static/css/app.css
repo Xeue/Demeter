@@ -4,27 +4,6 @@ body {
    inset: 0;
 }
 
-.logsView {
-   display: none;
-}
-
-body.showLogs .logsView {
-   display: inline;
-}
-
-body.showLogs #frame,
-body.loaded #cancel {
-   display: none;
-}
-
-body.showLogs #logsCont {
-   display: block;
-}
-
-body #logsCont {
-   display: none;
-}
-
 nav {
    position: absolute;
    bottom: 0;
@@ -160,22 +139,6 @@ label:has(:checked) {
    color: #fff
 }
 
-#frame {
-   position: fixed;
-   top: 0;
-   bottom: 0;
-   left: 0;
-   right: 0;
-   width: 100%;
-   height: 100%;
-   overflow: hidden;
-   border: none;
-}
-
-#frame.hidden,
-button.hidden {
-   display: none;
-}
 
 #logsCont {
    display: flex;
@@ -198,6 +161,61 @@ body.micaActive {
    background-color: #313d48;
    app-region: drag;
 }
+
+
+.diskCapacity {
+   height: 1rem;
+   background: aliceblue;
+   border-radius: 6px;
+   overflow: hidden;
+}
+
+.diskCapacity::before {
+   content: "";
+   display: block;
+   height: 100%;
+   width: var(--capacity);
+   background: #00b2ff;
+}
+
+.diskCard {
+   background: #282e34;
+   margin: 1rem;
+   padding: 0.2rem;
+   border-radius: 7px;
+}
+
+.diskIcon {
+   aspect-ratio: 1/1;
+   height: 3rem;
+   margin: 0 0.5rem;
+   background-image: url('../img/unknown.png');
+   background-size: contain;
+   background-position: center;
+   background-repeat: no-repeat;
+}
+
+.LocalFixedDisk {
+   background-image: url('../img/ssd.png');
+   background-size: contain;
+   background-position: center;
+   background-repeat: no-repeat;
+}
+
+.LocalFixedDiskC {
+   background-image: url('../img/ssd-c.png');
+   background-size: contain;
+   background-position: center;
+   background-repeat: no-repeat;
+}
+
+.RemovableDisk {
+   background-image: url('../img/usb.png');
+   background-size: contain;
+   background-position: center;
+   background-repeat: no-repeat;
+}
+
 
 @font-face {
    font-family: Ubuntu Mono;

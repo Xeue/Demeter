@@ -3,16 +3,20 @@ const serverID = new Date().getTime();
 
 const express = require('express');
 const fs = require('fs');
+const fsPromises = require('fs').promises;
+const temp = require('temp');
 const path = require('path');
 const {Logs} = require('xeue-logs');
 const {Config} = require('xeue-config');
 const {Server} = require('xeue-webserver');
-const {app, BrowserWindow, ipcMain, Tray, Menu} = require('electron');
+const {Shell} = require('xeue-shell');
+const {app, BrowserWindow, ipcMain} = require('electron');
 const {version} = require('./package.json');
 const electronEjs = require('electron-ejs');
-const AutoLaunch = require('auto-launch');
 const https = require('https');
 const {MicaBrowserWindow, IS_WINDOWS_11} = require('mica-electron');
+const iconvLite = require("iconv-lite");
+const childProcess = require("child_process");
 
 const background = IS_WINDOWS_11 ? 'micaActive' : 'bg-dark';
 
@@ -22,7 +26,11 @@ const httpsAgent = new https.Agent({
 
 const __static = __dirname+'/static';
 
-const ejs = new electronEjs({'static': __static, 'background': background}, {});
+const CFImager = path.join(
+	__dirname,
+	"lib",
+	"CFImager.exe"
+).replace("app.asar", "app.asar.unpacked");
 
 Array.prototype.symDiff = function(x) {
 	return this.filter(y => !x.includes(y)).concat(x => !y.includes(x));
@@ -58,8 +66,7 @@ const webServer = new Server(
 	expressRoutes,
 	logger,
 	version,
-	config,
-	doMessage
+	config
 );
 
 /* Start App */
@@ -71,7 +78,7 @@ const webServer = new Server(
 	await createWindow();
 
 	{ /* Config */
-		logger.printHeader('Demeter Monitoring');
+		logger.printHeader('Demeter');
 		config.require('port', [], 'What port shall the server use');
 		config.require('systemName', [], 'What is the name of the system');
 		config.require('loggingLevel', {'A':'All', 'D':'Debug', 'W':'Warnings', 'E':'Errors'}, 'Set logging level');
@@ -101,6 +108,7 @@ const webServer = new Server(
 			config.set('debugLineNum', false);
 			config.set('printPings', false);
 			config.set('devMode', false);
+			config.write(path.join(app.getPath('documents'), 'DemeterData', 'config.conf'));
 		}
 
 		if (config.get('loggingLevel') == 'D' || config.get('loggingLevel') == 'A') {
@@ -142,32 +150,24 @@ const webServer = new Server(
 	webServer.start(config.get('port'));
 
 	logger.log(`Demeter can be accessed at http://localhost:${config.get('port')}`, 'C');
-	mainWindow.webContents.send('loaded', `http://localhost:${config.get('port')}/inApp`);
-	
 })().catch(error => {
 	console.log(error);
 });
+
+
+const ejs = new electronEjs({
+	'static': __static,
+	'background': background,
+	'version': version,
+	'systemName': config.get('systemName'),
+	'appPort': config.get('port')
+}, {});
 
 
 /* Electron */
 
 
 async function setUpApp() {
-	const tray = new Tray(path.join(__static, 'img/icon/network-96.png'));
-	tray.setContextMenu(Menu.buildFromTemplate([
-		{
-			label: 'Show App', click: function () {
-				mainWindow.show();
-			}
-		},
-		{
-			label: 'Exit', click: function () {
-				isQuiting = true;
-				app.quit();
-			}
-		}
-	]));
-
 	ipcMain.on('window', (event, message) => {
 		switch (message) {
 		case 'exit':
@@ -195,14 +195,6 @@ async function setUpApp() {
 		default:
 			break;
 		}
-	});
-
-	const autoLaunch = new AutoLaunch({
-		name: 'Demeter Monitoring',
-		isHidden: true,
-	});
-	autoLaunch.isEnabled().then(isEnabled => {
-		if (!isEnabled) autoLaunch.enable();
 	});
 
 	app.on('before-quit', function () {
@@ -253,28 +245,14 @@ async function createWindow() {
 	}
 
 	mainWindow.on('close', function (event) {
-		if (!isQuiting) {
-			event.preventDefault();
-			mainWindow.webContents.send('requestExit');
-			event.returnValue = false;
-		}
+		logger.warn("Exiting");
 	});
 
 	mainWindow.on('minimize', function (event) {
-		event.preventDefault();
-		mainWindow.hide();
+		logger.info("Minimising");
 	});
 
 	mainWindow.loadURL(path.resolve(__main, 'views/app.ejs'));
-
-	await new Promise(resolve => {
-		ipcMain.on('ready', (event, ready) => {
-			if (configLoaded) {
-				mainWindow.webContents.send('loaded', `http://localhost:${config.get('port')}/inApp`);
-			}
-			resolve();
-		});
-	});
 }
 
 
@@ -287,35 +265,13 @@ function expressRoutes(expressApp) {
 	expressApp.use(express.json());
 	expressApp.use(express.static(__static));
 
-	expressApp.get('/',  (req, res) =>  {
+	expressApp.get('/', async (req, res) =>  {
 		logger.log('New client connected', 'A');
 		res.header('Content-type', 'text/html');
 		res.render('web', {
-			switches:switches('Media'),
-			controlSwitches:switches('Control'),
 			systemName:config.get('systemName'),
-			webSocketEndpoint:config.get('webSocketEndpoint'),
-			secureWebSocketEndpoint:config.get('secureWebSocketEndpoint'),
-			webEnabled:config.get('webEnabled'),
 			version: version,
-			pings:syslogSourceList(),
 			background:'bg-dark'
-		});
-	});
-
-	expressApp.get('/inApp',  (req, res) =>  {
-		logger.log('New client connected', 'A');
-		res.header('Content-type', 'text/html');
-		res.render('web', {
-			switches:switches('Media'),
-			controlSwitches:switches('Control'),
-			systemName:config.get('systemName'),
-			webSocketEndpoint:config.get('webSocketEndpoint'),
-			secureWebSocketEndpoint:config.get('secureWebSocketEndpoint'),
-			webEnabled:config.get('webEnabled'),
-			version: version,
-			pings:syslogSourceList(),
-			background:'micaActive'
 		});
 	});
 
@@ -325,198 +281,194 @@ function expressRoutes(expressApp) {
 		const aboutInfo = {
 			'aboutInfo': {
 				'Version': version,
-				'Config': config.all(),
-				'Switches':switches(),
-				'IQ Frames':frames(),
-				'UPS':ups(),
-				'Devices':devices(),
-				'Pings':pings(),
-				'Port Monitoring':ports()
+				'Config': config.all()
 			},
 			'systemName': config.get('systemName')
 		}
 		res.render('about', aboutInfo);
 	})
-
-	expressApp.get('/broken', (req, res) => {
-		res.send('no');
-	});
-
-	expressApp.get('/fibre', (req, res) => {
-		logger.log('Request for fibre data', 'D');
-		res.send(JSON.stringify(data.fibre));
-	});
-
-	expressApp.get('/ups', (req, res) => {
-		logger.log('Request for UPS data', 'D');
-		res.send(JSON.stringify(data.ups));
-	});
-
-	expressApp.get('/phy', (req, res) => {
-		logger.log('Request for PHY/FEC data', 'D');
-		res.send(JSON.stringify(data.phy));
-	});
-
-	expressApp.get('/mac', (req, res) => {
-		logger.log('Request for mac/flap data', 'D');
-		res.send(JSON.stringify(data.mac));
-	});
-
-	expressApp.get('/devices', (req, res) => {
-		logger.log('Request for devices data', 'D');
-		res.send(JSON.stringify(data.devices.Media));
-	});
-
-	expressApp.get('/getConfig', (req, res) => {
-		logger.log('Request for devices config', 'D');
-		let catagory = req.query.catagory;
-		let data;
-		switch (catagory) {
-		case 'switches':
-			data = switches();
-			break;
-		case 'ports':
-			data = ports();
-			break;
-		case 'frames':
-			data = frames();
-			break;
-		case 'ups':
-			data = ups();
-			break;
-		case 'devices':
-			data = devices();
-			break;
-		case 'pings':
-			data = pings();
-			break;
-		default:
-			break;
-		}
-		res.send(JSON.stringify(data));
-	});
-
-	expressApp.get('/config', (req, res) => {
-		logger.log('Requesting app config', 'A');
-		res.send(JSON.stringify(config.all()));
-	});
-
-	expressApp.post('/setswitches', (req, res) => {
-		logger.log('Request to set switches config data', 'D');
-		writeData('Switches', req.body);
-		res.send('Done');
-	});
-	expressApp.post('/setports', (req, res) => {
-		logger.log('Request to set ports config data', 'D');
-		writeData('Ports', req.body);
-		res.send('Done');
-	});
-	expressApp.post('/setdevices', (req, res) => {
-		logger.log('Request to set devices config data', 'D');
-		writeData('Devices', req.body);
-		res.send('Done');
-	});
-	expressApp.post('/setups', (req, res) => {
-		logger.log('Request to set ups config data', 'D');
-		writeData('Ups', req.body);
-		res.send('Done');
-	});
-	expressApp.post('/setframes', (req, res) => {
-		logger.log('Request to set frames config data', 'D');
-		writeData('Frames', req.body);
-		res.send('Done');
-	});
-	expressApp.post('/setpings', (req, res) => {
-		logger.log('Request to set pings config data', 'D');
-		writeData('Pings', req.body);
-		res.send('Done');
-	});
-}
-
-
-async function doMessage(msgObj, socket) {
-	const payload = msgObj.payload;
-	const header = msgObj.header;
-	if (typeof payload.source == 'undefined') {
-		payload.source = 'default';
-	}
-	switch (payload.command) {
-	case 'meta':
-		logger.object('Received', msgObj, 'D');
-		socket.send('Received meta');
-		break;
-	case 'register':
-		coreDoRegister(socket, msgObj);
-		break;
-	case 'get':
-		switch (payload.data) {
-			case 'temperature':
-				getTemperature(header, payload).then(data => {
-					webServer.sendTo(socket, data);
-				});
-				break;
-			case 'syslog':
-				getSyslog(header, payload).then(data => {
-					webServer.sendTo(socket, data);
-				})
-			default:
-				break;
-		}
-		break;
-	default:
-		logger.object('Unknown message', msgObj, 'W');
-	}
-}
-
-
-function coreDoRegister(socket, msgObj) {
-	const header = msgObj.header;
-	if (typeof socket.type == 'undefined') {
-		socket.type = header.type;
-	}
-	if (typeof socket.ID == 'undefined') {
-		socket.ID = header.fromID;
-	}
-	if (typeof socket.version == 'undefined') {
-		socket.version = header.version;
-	}
-	if (typeof socket.prodID == 'undefined') {
-		socket.prodID = header.prodID;
-	}
-	if (header.version !== version) {
-		if (header.version.substr(0, header.version.indexOf('.')) != version.substr(0, version.indexOf('.'))) {
-			logger.log('Connected client has different major version, it will not work with this server!', 'E');
-		} else {
-			logger.log('Connected client has differnet version, support not guaranteed', 'W');
-		}
-	}
-	logger.log(`${logger.g}${header.fromID}${logger.reset} Registered as new client`, 'D');
-	socket.connected = true;
-}
-
-function makeHeader() {
-	const header = {};
-	header.fromID = serverID;
-	header.timestamp = new Date().getTime();
-	header.version = version;
-	header.type = 'Server';
-	header.active = true;
-	header.messageID = header.timestamp;
-	header.recipients = [];
-	header.system = config.get('systemName');
-	return header;
-}
-
-function distributeData(type, data) {
-	sendCloudData({'command':'log', 'type':type, 'data':data});
-	webServer.sendToAll({'command':'log', 'type':type, 'data':data});
-}
-
-
-function minutes(mins) {
-	return parseInt(mins) * 60;
 }
 
 async function sleep(seconds) {
 	await new Promise (resolve => setTimeout(resolve, 1000*seconds));
+}
+
+setInterval(() => {checkDisks()}, 1*1000);
+
+async function checkDisks() {
+	logger.info("Checking disks");
+	const disks = await getDiskInfo();
+	logger.info('Disks', disks);
+	mainWindow.webContents.send('disks', disks);
+}
+
+async function createGatewayCard(driveLetter) {
+	const shell = new Shell(logger, 'FORMAT', 'D', 'cmd.exe');
+
+	const selectDiskCmd = temp.path({ suffix: '.txt' });
+	await fsPromises.writeFile(selectDiskCmd, [`SELECT VOLUME ${driveLetter}`,`LIST DISK`, `EXIT`].join('\n'));
+	const {stdout} = await shell.run(`diskpart /s "${selectDiskCmd}"`);
+	let selectedDisk;
+	stdout.forEach(row => {
+		if (row.includes("* Disk")) {
+			selectedDisk = String(row.match(/\* Disk (.*?) Online/g)).replace('* Disk ', '').replace(/\s*Online/g, '');
+			return;
+		}
+	});
+	logger.debug('Selected disk is: '+selectedDisk);
+
+	const cleanDiskCommand = temp.path({ suffix: '.txt' });
+	await fsPromises.writeFile(cleanDiskCommand, [
+		`SELECT DISK ${selectedDisk}`,
+		`CLEAN`,
+		`EXIT`
+	].join('\n'));
+	logger.debug('Cleaning disk');
+	await shell.run(`diskpart /s "${cleanDiskCommand}"`);
+
+	logger.debug('Creating new partition');
+
+	const partition32 = temp.path({ suffix: '.txt' });
+	await fsPromises.writeFile(partition32, [
+		`SELECT DISK ${selectedDisk}`,
+		`CREATE PARTITION PRIMARY SIZE=27400 OFFSET=10240`,
+		`EXIT`
+	].join('\n'));
+	const partition16 = temp.path({ suffix: '.txt' });
+	await fsPromises.writeFile(partition16, [
+		`SELECT DISK ${selectedDisk}`,
+		`CREATE PARTITION PRIMARY SIZE=12560 OFFSET=10240`,
+		`EXIT`
+	].join('\n'));
+	const partition8 = temp.path({ suffix: '.txt' });
+	await fsPromises.writeFile(partition8, [
+		`SELECT DISK ${selectedDisk}`,
+		`CREATE PARTITION PRIMARY SIZE=5550 OFFSET=10240`,
+		`EXIT`
+	].join('\n'));
+	{
+		const errorMessage = "Virtual Disk Service error:\r\nThere is not enough usable space for this operation.";
+		logger.debug('Trying to create 27GB partition');
+		const {stdout} = await shell.run(`diskpart /s "${partition32}"`);
+		if (stdout.includes(errorMessage)) {
+			logger.debug('Trying to create 12GB partition');
+			const {stdout} = await shell.run(`diskpart /s "${partition16}"`);
+			if (stdout.includes(errorMessage)) {
+				logger.debug('Trying to create 5.5GB partition');
+				const {stdout} = await shell.run(`diskpart /s "${partition8}"`);
+				if (stdout.includes(errorMessage)) {
+					logger.error('Cannot create partition');
+					return;
+				}
+			}
+		}
+	}
+
+	logger.debug('Formating new partition');
+	await shell.run(`ECHO Y | format ${driveLetter}: /FS:FAT32 /Q /X /V:UCP25_SDI`);
+	logger.debug('Copying boot files');
+	await shell.run(`${CFImager} -raw -offset 0x400 -skip 0x400 -f ipl.bin -d ${driveLetter}`);
+	logger.debug('Disk prepared');
+}
+
+async function createGatewayCard() {
+
+}
+
+//createGatewayCard('D');
+
+
+
+
+
+
+
+
+
+
+
+function getDiskInfo() {
+    return new Promise((resolve, reject) => {
+		const drives = [];
+		let buffer;
+		let cp;
+        try {
+			buffer = childProcess.execSync(
+				'wmic logicaldisk get Caption,FreeSpace,Size,VolumeSerialNumber,Description,VolumeName /format:list',
+				{
+					windowsHide: true,
+					encoding: 'buffer'
+				}
+			);
+			cp = childProcess.execSync('chcp').toString().split(':')[1].trim();
+		} catch (error) {
+			logger.error(`Couldn't get disk info`);
+            reject(error);
+        }
+		let encoding = '';
+		switch (cp) {
+			case '65000': // UTF-7
+				encoding = 'UTF-7';
+				break;
+			case '65001': // UTF-8
+				encoding = 'UTF-8';
+				break;
+			default: // Other Encoding
+				if (/^-?[\d.]+(?:e-?\d+)?$/.test(cp)) {
+					encoding = 'cp' + cp;
+				} else {
+					encoding = cp;
+				}
+		}
+		buffer = iconvLite.encode(iconvLite.decode(buffer, encoding), 'UTF-8');
+		const lines = buffer.toString().split('\r\r\n');
+		let newDiskIteration = false;
+		let caption = '';
+		let description = '';
+		let freeSpace = 0;
+		let size = 0;
+		let name = '';
+		lines.forEach(value => {
+			if (value !== '') {
+				const [section, data] = value.split('=');
+				switch (section) {
+					case 'Caption':
+						caption = data;
+						newDiskIteration = true;
+						break;
+					case 'Description':
+						description = data;
+						break;
+					case 'FreeSpace':
+						freeSpace = isNaN(parseFloat(data)) ? 0 : +data;
+						break;
+					case 'Size':
+						size = isNaN(parseFloat(data)) ? 0 : +data;
+						break;
+					case 'VolumeName':
+						name = data;
+						break;
+				}
+			} else {
+				if (!newDiskIteration) return;
+				const used = (size - freeSpace);
+				const percent = size > 0 ? Math.round((used / size) * 100) + '%' : '0%';
+				drives.push({
+					'filesystem': description,
+					'blocks': size,
+					'used': used,
+					'available': freeSpace,
+					'capacity': percent,
+					'mounted': caption,
+					'name': name
+				});
+				newDiskIteration = false;
+				caption = '';
+				description = '';
+				freeSpace = 0;
+				size = 0;
+			}
+		});
+		resolve(drives);
+    });
 }

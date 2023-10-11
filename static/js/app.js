@@ -1,56 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-	window.electronAPI.configQuestion((event, message) => {
-
-		const configElement = document.getElementById('config');
-	
-		const msgObject = JSON.parse(message);
-		const question = document.getElementById('question');
-		const answerCont = document.getElementById('answerCont');
-		question.innerHTML = msgObject.question + '?';
-		answerCont.setAttribute('data-current', msgObject.current);
-	
-		if (typeof msgObject.options === 'undefined') {
-			const placeholder = typeof msgObject.current == 'undefined' ? '' : msgObject.current;
-			const input = `<input type="text" id="answer" placeholder="${placeholder}">`;
-			answerCont.classList.add('freeform');
-			answerCont.classList.remove('select');
-			answerCont.innerHTML = input;
-		} else {
-			let options = '';
-			let optionsPretty = '';
-			let hasDescription = false;
-	
-			if (!Array.isArray(msgObject.options)) {
-				hasDescription = true;
-				[msgObject.options, optionsPretty] = [Object.keys(msgObject.options), msgObject.options];
-			}
-	
-			msgObject.options.forEach(option => {
-				const checked = String(option) == String(msgObject.current) ? 'checked=checked' : '';
-				const label = hasDescription ? optionsPretty[option] : option;
-				options += `<label for="answer_${option}">${label}<input type="radio" class="answerRadio" name="answer" id="answer_${option}" value="${option}" ${checked}></label>`;
-			});
-			answerCont.classList.remove('freeform');
-			answerCont.classList.add('select');
-			answerCont.innerHTML = options;
-		}
-	
-		if (!configElement.classList.contains('show')) {
-			configModal.show();
-		}
-	});
-
-	window.electronAPI.configDone(() => {
-		configModal.hide();
-	});
-	
-	window.electronAPI.loaded((event, url) => {
-		const frame = document.getElementById('frame');
-		frame.setAttribute('src', url);
-		const body = document.getElementById('body');
-		body.classList.add('loaded');
-	});
-	
 	window.electronAPI.log((event, log) => {
 		const Logs = document.getElementById('logs');
 
@@ -86,75 +34,44 @@ document.addEventListener('DOMContentLoaded', () => {
 		const $log = `<div class='log'>${output}</div>`;
 		Logs.innerHTML += $log;
 	});
-	
-	window.electronAPI.requestExit(() => {
-		exitModal.show();
-	});
-	
-	const configModal = new bootstrap.Modal(document.getElementById('config'));
-	const exitModal = new bootstrap.Modal(document.getElementById('exitConfirm'));
 
-	window.electronAPI.ready();
-
-	document.getElementById('exit').addEventListener('click', () => {
-		exitModal.show();
-	});
-	document.getElementById('cancel').addEventListener('click', () => {
-		const body = document.getElementById('body');
-		if (body.classList.contains('loaded')) {
-			configModal.hide();
-			window.electronAPI.config('stop');
-		} else {
-			exitModal.show();
+	window.electronAPI.disks((event, disks) => {
+		const _disks = document.getElementById('disks');
+		const _allDisks = document.getElementsByClassName('activeDisk');
+		for (let _disk of _allDisks) {
+			_disk.classList.remove('activeDisk')
+			_disk.classList.add('inactiveDisk')
 		}
-	});
-	document.getElementById('exitYes').addEventListener('click', () => {
-		window.electronAPI.window('exit');
-	});
-	document.getElementById('exitMinimise').addEventListener('click', () => {
-		exitModal.hide();
-		window.electronAPI.window('minimise');
-	});
-	document.getElementById('exitCancel').addEventListener('click', () => {
-		exitModal.hide();
-	});
-
-	const toggleButton = document.getElementById('toggleView');
-	toggleButton.addEventListener('click', () => {
-		const body = document.getElementById('body');
-		if (body.classList.contains('showLogs')) {
-			toggleButton.innerText = 'Show Logs';
-		} else {
-			toggleButton.innerText = 'Show Monitoring';
+		disks.forEach(disk => {
+			const diskLetter = String(disk.mounted).replace(':','');
+			const _diskCont = document.getElementById(`disk-${diskLetter}`);
+			const type = diskLetter == 'C' ? 'LocalFixedDiskC' : String(disk.filesystem).replace(/ /g,'');
+			if (_diskCont) {
+				_diskCont.classList.add('activeDisk');
+				_diskCont.classList.remove('inactiveDisk');
+				document.querySelector(`#disk-${diskLetter} .diskName`).innerHTML = `${disk.name} - ${disk.filesystem}`;
+				document.querySelector(`#disk-${diskLetter} .diskLetter`).innerHTML = `(${diskLetter})`;
+				document.querySelector(`#disk-${diskLetter} .diskCapacity`).setAttribute('style', `--capacity: ${disk.capacity};`);
+				document.querySelector(`#disk-${diskLetter} .diskSpace`).innerHTML = `${convertBytes(disk.available)} used of ${convertBytes(disk.blocks)}`;
+			} else {
+				_disks.innerHTML += `<section id="disk-${diskLetter}" class="diskCard text-light activeDisk d-flex align-items-center">
+					<div class="diskIcon ${type}"></div>
+					<div class="d-flex flex-column">
+						<div>
+							<span class="diskName">${disk.name} - ${disk.filesystem}</span>
+							<span class="diskLetter">(${diskLetter})</span>
+						</div>
+						<div class="diskCapacity" style="--capacity: ${disk.capacity};"></div>
+						<div class="diskSpace">${convertBytes(disk.available)} used of ${convertBytes(disk.blocks)}</div>
+					</div>
+				</section>`;
+			}
+		});
+		const _inactiveDisks = document.getElementsByClassName('inactiveDisk');
+		for (let _disk of _inactiveDisks) {
+			_disk.remove();
 		}
-		body.classList.toggle('showLogs');
-	});
-
-	document.getElementById('startConfig').addEventListener('click', () => {
-		window.electronAPI.config('start');
-	});
-
-	document.getElementById('showConfig').addEventListener('click', () => {
-		window.electronAPI.config('show');
-	});
-
-	document.getElementById('clearLogs').addEventListener('click', () => {
-		document.getElementById('logs').innerHTML = '';
-	});
-
-	document.getElementById('next').addEventListener('click', () => {
-		const answerCont = document.getElementById('answerCont');
-		let value;
-		if (answerCont.classList.contains('freeform')) {
-			value = document.getElementById('answer').value;
-		} else {
-			value = document.querySelector('input[name="answer"]:checked').value;
-		}
-
-		if (value == '') value = answerCont.getAttribute('data-current');
-
-		window.electronAPI.configAnswer(value);
-	});
+	})
 });
 
 function getClass(num) {
@@ -189,4 +106,17 @@ function getClass(num) {
 		break;
 	}
 	return value;
+}
+
+function convertBytes(raw) {
+	raw = Number(raw);
+	let iterations = 0;
+	const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+	for (let index = 0; index < 4; index++) {
+		if (raw > 1024) {
+			iterations++;
+			raw = raw/1024;
+		}
+	}
+	return `${parseFloat(raw.toPrecision(3))} ${sizes[iterations]}`;
 }

@@ -1,6 +1,6 @@
 {
   "name": "demeter",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "GV SD Card flasher",
   "main": "main.js",
   "dependencies": {
@@ -9,8 +9,10 @@
     "electron-ejs": "^1.2.1",
     "express": "^4.18.2",
     "mica-electron": "^1.5.0",
+    "temp": "^0.9.4",
     "xeue-config": "^2.1.0",
     "xeue-logs": "^2.0.0",
+    "xeue-shell": "^1.2.0",
     "xeue-webserver": "^2.0.0"
   },
   "scripts": {
@@ -23,10 +25,13 @@
     "productName": "Demeter",
     "files": [
       "**/*",
-      "static/*"
+      "static/*",
+      "lib/*"
     ],
     "win": {
       "icon": "static/img/icon/icon.ico",
+      "asarUnpack": "**/lib/*.exe",
+      "requestedExecutionLevel": "requireAdministrator",
       "target": [
         {
           "target": "nsis",

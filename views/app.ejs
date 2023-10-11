@@ -1,25 +1,33 @@
 <!DOCTYPE html>
 <html>
     <head>
+        <meta name="color-scheme" content="dark">
         <link href="<%-static%>/lib/bootstrap.min.css" rel="stylesheet" type="text/css">
         <link href="<%-static%>/css/app.css" rel="stylesheet" type="text/css">
+        <script type="text/javascript">
+            const currentSystem = '<%=systemName%>';
+            const version = '<%=version%>';
+            const appPort = '<%=appPort%>';
+            const static = '<%=static%>';
+        </script>
         <script src="<%-static%>/lib/jquery-3.6.0.min.js" type="text/javascript"></script>
         <script src="<%-static%>/lib/bootstrap.min.js" type="text/javascript"></script>
+        <script src="<%-static%>/lib/commonWS.js" type="text/javascript"></script>
         <script src="<%-static%>/js/app.js" type="text/javascript"></script>
 
         <title>Demeter</title>
         <link id="favicon_48" rel="icon" href="<%-static%>/img/icon/icon.svg" sizes="256x256">
     </head>
     <body class="<%-background%>" id="body">
-        <iframe id="frame"></iframe>
-        <main id="logsCont">
+        <main id="demeterCont">
             <nav class="drag navbar navbar-expand-lg navbar-dark bg-title px-2 m-0">
                 <a class="navbar-brand" href="#">
                     <img src="../static/img/icon/icon.svg" class="d-inline-block align-top" alt="" width="30" height="30">
                     Demeter
                 </a>
             </nav>
-            <div id="logs"></div>
+            <div id="disks"></div>
+            <div id="logs" class="d-none"></div>
         </main>
 
         <div class="modal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" id="config">
@@ -58,13 +66,5 @@
                 </div>
             </div>
         </div>
-
-        <nav>
-            <button type="button" class="btn btn-danger hidden" id="exit">Exit</button>
-            <button type="button" class="btn btn-secondary logsView" id="startConfig">Edit Config</button>
-            <button type="button" class="btn btn-secondary logsView" id="showConfig">Show Config</button>
-            <button type="button" class="btn btn-secondary logsView" id="clearLogs">Clear Logs</button>
-            <button type="button" class="btn btn-primary" id="toggleView">Show Logs</button>
-        </nav>
     </body>
 </html>

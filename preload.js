@@ -8,6 +8,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
 	configQuestion: (callback) => ipcRenderer.on('configQuestion', callback),
 	configDone: (callback) => ipcRenderer.on('configDone', callback),
 	log: (callback) => ipcRenderer.on('log', callback),
-	loaded: (callback) => ipcRenderer.on('loaded', callback),
-	requestExit: (callback) => ipcRenderer.on('requestExit', callback)
+	disks: (callback) => ipcRenderer.on('disks', callback)
 });
