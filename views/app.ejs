@@ -1,70 +1,38 @@
 <!DOCTYPE html>
 <html>
     <head>
+        <title>Demeter</title>
         <meta name="color-scheme" content="dark">
-        <link href="<%-static%>/lib/bootstrap.min.css" rel="stylesheet" type="text/css">
-        <link href="<%-static%>/css/app.css" rel="stylesheet" type="text/css">
+        <link type="text/css" rel="stylesheet" href="<%-static%>/lib/bootstrap.min.css">
+        <link type="text/css" rel="stylesheet" href="<%-static%>/css/app.css">
+        <link id="favicon_48" rel="icon" href="<%-static%>/img/icon/icon.svg" sizes="256x256">
         <script type="text/javascript">
             const currentSystem = '<%=systemName%>';
             const version = '<%=version%>';
-            const appPort = '<%=appPort%>';
             const static = '<%=static%>';
         </script>
-        <script src="<%-static%>/lib/jquery-3.6.0.min.js" type="text/javascript"></script>
-        <script src="<%-static%>/lib/bootstrap.min.js" type="text/javascript"></script>
-        <script src="<%-static%>/lib/commonWS.js" type="text/javascript"></script>
-        <script src="<%-static%>/js/app.js" type="text/javascript"></script>
-
-        <title>Demeter</title>
-        <link id="favicon_48" rel="icon" href="<%-static%>/img/icon/icon.svg" sizes="256x256">
+        <script type="text/javascript" src="<%-static%>/lib/jquery-3.6.0.min.js"></script>
+        <script type="text/javascript" src="<%-static%>/lib/bootstrap.min.js"></script>
+        <script type="text/javascript" src="<%-static%>/lib/commonWS.js"></script>
+        <script type="text/javascript" src="<%-static%>/js/app.js"></script>
     </head>
-    <body class="<%-background%>" id="body">
-        <main id="demeterCont">
-            <nav class="drag navbar navbar-expand-lg navbar-dark bg-title px-2 m-0">
-                <a class="navbar-brand" href="#">
-                    <img src="../static/img/icon/icon.svg" class="d-inline-block align-top" alt="" width="30" height="30">
-                    Demeter
-                </a>
-            </nav>
-            <div id="disks"></div>
+    <body class="<%-background%> overflow-hidden d-flex flex-column" id="body">
+        <nav class="drag navbar navbar-expand-lg navbar-dark bg-title px-2 m-0">
+            <a class="navbar-brand" href="#">
+                <img src="../static/img/icon/icon.svg" class="d-inline-block align-top" alt="" width="30" height="30">
+                Demeter
+            </a>
+        </nav>
+        <main id="demeterCont" class="overflow-hidden">
+            <section class="d-flex h-100 overflow-hidden">
+                <div id="disks" class="flex-fill overflow-auto"></div>
+                <div id="cardType" class="overflow-auto">
+                    <div class="cardType typeGateway">UCP Gateway</div>
+                    <div class="cardType typeMV">UCP Multiview</div>
+                    <div class="cardType typeMADI d-none">UCP MADI</div>
+                </div>
+            </section>
             <div id="logs" class="d-none"></div>
         </main>
-
-        <div class="modal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" id="config">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content bg-dark text-light">
-                    <div class="modal-header">
-                         <h5 class="modal-title">Set Config</h5>
-                    </div>
-                    <div class="modal-body">
-                        <p id="question"></p>
-                        <div id="answerCont" action="#"></div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-primary" id="next">Next</button>
-                        <button type="button" class="btn btn-danger" id="cancel" data-dismiss="modal">Cancel</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="modal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" id="exitConfirm">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content bg-dark text-light">
-                    <div class="modal-header">
-                         <h5 class="modal-title">Exit Demeter</h5>
-                    </div>
-                    <div class="modal-body">
-                        <p>Exiting Demeter will stop it collecting data and will close the program entirely.</p>
-                        <p>However Minimising Demeter will send it to the background where it can continue to monitor the system.</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-danger" id="exitYes">Exit</button>
-                        <button type="button" class="btn btn-success" id="exitMinimise" data-dismiss="modal">Minimise</button>
-                        <button type="button" class="btn btn-primary" id="exitCancel" data-dismiss="modal">Cancel</button>
-                    </div>
-                </div>
-            </div>
-        </div>
     </body>
 </html>

@@ -1,19 +1,17 @@
 {
   "name": "demeter",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "GV SD Card flasher",
   "main": "main.js",
   "dependencies": {
     "auto-launch": "^5.0.6",
     "ejs": "^3.1.9",
     "electron-ejs": "^1.2.1",
-    "express": "^4.18.2",
     "mica-electron": "^1.5.0",
     "temp": "^0.9.4",
     "xeue-config": "^2.1.0",
     "xeue-logs": "^2.0.0",
-    "xeue-shell": "^1.2.0",
-    "xeue-webserver": "^2.0.0"
+    "xeue-shell": "^1.2.0"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

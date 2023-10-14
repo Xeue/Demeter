@@ -45,25 +45,31 @@ document.addEventListener('DOMContentLoaded', () => {
 		disks.forEach(disk => {
 			const diskLetter = String(disk.mounted).replace(':','');
 			const _diskCont = document.getElementById(`disk-${diskLetter}`);
-			const type = diskLetter == 'C' ? 'LocalFixedDiskC' : String(disk.filesystem).replace(/ /g,'');
+			let type = String(disk.filesystem).replace(/ /g,'');
+			let disabled = '';
+			if (diskLetter == 'C') {
+				type = 'LocalFixedDiskC'
+				disabled = 'disabled';
+			}
 			if (_diskCont) {
 				_diskCont.classList.add('activeDisk');
 				_diskCont.classList.remove('inactiveDisk');
 				document.querySelector(`#disk-${diskLetter} .diskName`).innerHTML = `${disk.name} - ${disk.filesystem}`;
 				document.querySelector(`#disk-${diskLetter} .diskLetter`).innerHTML = `(${diskLetter})`;
 				document.querySelector(`#disk-${diskLetter} .diskCapacity`).setAttribute('style', `--capacity: ${disk.capacity};`);
-				document.querySelector(`#disk-${diskLetter} .diskSpace`).innerHTML = `${convertBytes(disk.available)} used of ${convertBytes(disk.blocks)}`;
+				document.querySelector(`#disk-${diskLetter} .diskSpace`).innerHTML = `${convertBytes(disk.available)} free of ${convertBytes(disk.blocks)}`;
 			} else {
 				_disks.innerHTML += `<section id="disk-${diskLetter}" class="diskCard text-light activeDisk d-flex align-items-center">
 					<div class="diskIcon ${type}"></div>
-					<div class="d-flex flex-column">
+					<div class="d-flex flex-column flex-fill me-4">
 						<div>
 							<span class="diskName">${disk.name} - ${disk.filesystem}</span>
 							<span class="diskLetter">(${diskLetter})</span>
 						</div>
 						<div class="diskCapacity" style="--capacity: ${disk.capacity};"></div>
-						<div class="diskSpace">${convertBytes(disk.available)} used of ${convertBytes(disk.blocks)}</div>
+						<div class="diskSpace">${convertBytes(disk.available)} free of ${convertBytes(disk.blocks)}</div>
 					</div>
+					<input type="checkbox" ${disabled} class="form-check-input me-4 mt-0">
 				</section>`;
 			}
 		});

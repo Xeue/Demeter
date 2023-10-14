@@ -183,6 +183,15 @@ body.micaActive {
    margin: 1rem;
    padding: 0.2rem;
    border-radius: 7px;
+   margin-right: 0.5rem;
+   outline: #0d6efd00 1px solid;
+   box-shadow: #0d6efd00 0px 0px 9px -2px;
+   transition: 0.3s;
+}
+
+.diskCard:has(input:checked) {
+   outline: #0d6efd 1px solid;
+   box-shadow: #0D6EFD 0px 0px 9px -2px;
 }
 
 .diskIcon {
@@ -216,6 +225,34 @@ body.micaActive {
    background-repeat: no-repeat;
 }
 
+.cardType {
+   background: #282e34;
+   margin: 1rem;
+   margin-left: 0.5rem;
+   padding: 0.5rem;
+   border-radius: 7px;
+   color: white;
+   width: 8rem;
+   background-size: 5rem;
+   background-position-x: center;
+   background-position-y: 0.5rem;
+   background-repeat: no-repeat;
+   height: 8rem;
+   text-align: center;
+   padding-top: 5.5rem;
+}
+
+.typeGateway {
+    background-image: url('../img/sdi.png');
+}
+
+.typeMADI {
+    background-image: url('../img/madi.png');
+}
+
+.typeMV {
+    background-image: url('../img/multi.png');
+}
 
 @font-face {
    font-family: Ubuntu Mono;

@@ -1,28 +1,19 @@
 /* eslint-disable no-unused-vars */
-const serverID = new Date().getTime();
-
-const express = require('express');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const temp = require('temp');
 const path = require('path');
 const {Logs} = require('xeue-logs');
 const {Config} = require('xeue-config');
-const {Server} = require('xeue-webserver');
 const {Shell} = require('xeue-shell');
 const {app, BrowserWindow, ipcMain} = require('electron');
 const {version} = require('./package.json');
 const electronEjs = require('electron-ejs');
-const https = require('https');
 const {MicaBrowserWindow, IS_WINDOWS_11} = require('mica-electron');
 const iconvLite = require("iconv-lite");
 const childProcess = require("child_process");
 
 const background = IS_WINDOWS_11 ? 'micaActive' : 'bg-dark';
-
-const httpsAgent = new https.Agent({
-	rejectUnauthorized: false,
-});
 
 const __static = __dirname+'/static';
 
@@ -62,12 +53,6 @@ const logger = new Logs(
 const config = new Config(
 	logger
 );
-const webServer = new Server(
-	expressRoutes,
-	logger,
-	version,
-	config
-);
 
 /* Start App */
 
@@ -79,7 +64,6 @@ const webServer = new Server(
 
 	{ /* Config */
 		logger.printHeader('Demeter');
-		config.require('port', [], 'What port shall the server use');
 		config.require('systemName', [], 'What is the name of the system');
 		config.require('loggingLevel', {'A':'All', 'D':'Debug', 'W':'Warnings', 'E':'Errors'}, 'Set logging level');
 		config.require('createLogFile', {true: 'Yes', false: 'No'}, 'Save logs to local file');
@@ -90,7 +74,6 @@ const webServer = new Server(
 			config.require('devMode', {true: 'Yes', false: 'No'}, 'Dev mode - Disables connections to devices', ['advancedConfig', true]);
 		}
 
-		config.default('port', 8080);
 		config.default('systemName', 'Demeter');
 		config.default('loggingLevel', 'W');
 		config.default('createLogFile', true);
@@ -100,7 +83,6 @@ const webServer = new Server(
 		config.default('devMode', false);
 
 		if (!await config.fromFile(path.join(app.getPath('documents'), 'DemeterData', 'config.conf'))) {
-			config.set('port', 8080);
 			config.set('systemName', 'Demeter');
 			config.set('loggingLevel', 'W');
 			config.set('createLogFile', true);
@@ -147,9 +129,6 @@ const webServer = new Server(
 		configLoaded = true;
 	}
 
-	webServer.start(config.get('port'));
-
-	logger.log(`Demeter can be accessed at http://localhost:${config.get('port')}`, 'C');
 })().catch(error => {
 	console.log(error);
 });
@@ -159,8 +138,7 @@ const ejs = new electronEjs({
 	'static': __static,
 	'background': background,
 	'version': version,
-	'systemName': config.get('systemName'),
-	'appPort': config.get('port')
+	'systemName': config.get('systemName')
 }, {});
 
 
@@ -175,22 +153,6 @@ async function setUpApp() {
 			break;
 		case 'minimise':
 			mainWindow.hide();
-			break;
-		default:
-			break;
-		}
-	});
-
-	ipcMain.on('config', (event, message) => {
-		switch (message) {
-		case 'start':
-			config.fromAPI(path.join(app.getPath('documents'), 'DemeterData','config.conf'), configQuestion, configDone);
-			break;
-		case 'stop':
-			logger.log('Not implemeneted yet: Cancle config change');
-			break;
-		case 'show':
-			config.print();
 			break;
 		default:
 			break;
@@ -253,40 +215,6 @@ async function createWindow() {
 	});
 
 	mainWindow.loadURL(path.resolve(__main, 'views/app.ejs'));
-}
-
-
-/* Express setup & Websocket Server */
-
-
-function expressRoutes(expressApp) {
-	expressApp.set('views', path.join(__main, 'views'));
-	expressApp.set('view engine', 'ejs');
-	expressApp.use(express.json());
-	expressApp.use(express.static(__static));
-
-	expressApp.get('/', async (req, res) =>  {
-		logger.log('New client connected', 'A');
-		res.header('Content-type', 'text/html');
-		res.render('web', {
-			systemName:config.get('systemName'),
-			version: version,
-			background:'bg-dark'
-		});
-	});
-
-	expressApp.get('/about', (req, res) => {
-		logger.log('Collecting about information', 'A');
-		res.header('Content-type', 'text/html');
-		const aboutInfo = {
-			'aboutInfo': {
-				'Version': version,
-				'Config': config.all()
-			},
-			'systemName': config.get('systemName')
-		}
-		res.render('about', aboutInfo);
-	})
 }
 
 async function sleep(seconds) {
@@ -371,21 +299,13 @@ async function createGatewayCard(driveLetter) {
 	logger.debug('Disk prepared');
 }
 
-async function createGatewayCard() {
+async function createMVCard(driveLetter) {
 
 }
 
-//createGatewayCard('D');
+async function createMadiCard(driveLetter) {
 
-
-
-
-
-
-
-
-
-
+}
 
 function getDiskInfo() {
     return new Promise((resolve, reject) => {
