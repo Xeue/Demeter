@@ -240,21 +240,53 @@ body.micaActive {
    height: 8rem;
    text-align: center;
    padding-top: 5.5rem;
+   cursor: pointer;
+   box-shadow: transparent 0px 0px 8px -3px;
+   transition: 0.3s;
 }
 
-.typeGateway {
+.cardType:hover {
+   box-shadow: #000000 0px 0px 8px -3px;
+   scale: 1.05;
+}
+
+#chooseGateway {
     background-image: url('../img/sdi.png');
 }
 
-.typeMADI {
+#chooseMADI {
     background-image: url('../img/madi.png');
 }
 
-.typeMV {
+#chooseMV {
     background-image: url('../img/multi.png');
+}
+
+#showSelect,
+.btn {
+	app-region: no-drag;
 }
 
 @font-face {
    font-family: Ubuntu Mono;
    src: url(../fonts/UbuntuMono-R.ttf);
+}
+
+.configFirmwareSelect {
+   display: none;
+}
+
+.configFirmware:checked ~ .configFirmwareSelect {
+   display: block;
+}
+
+#diskConfigList {
+   display: grid;
+   grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+}
+
+#configControls {
+   right: 1rem;
+   bottom: 1rem;
+   position: fixed;
 }

@@ -1,7 +1,7 @@
 /* eslint-disable no-unused-vars */
 const fs = require('fs');
-const fsPromises = require('fs').promises;
-const temp = require('temp');
+const files = require('fs').promises;
+const temp = require('temp').track();
 const path = require('path');
 const {Logs} = require('xeue-logs');
 const {Config} = require('xeue-config');
@@ -12,6 +12,7 @@ const electronEjs = require('electron-ejs');
 const {MicaBrowserWindow, IS_WINDOWS_11} = require('mica-electron');
 const iconvLite = require("iconv-lite");
 const childProcess = require("child_process");
+const {Gateway} = require('./modules/gateway');
 
 const background = IS_WINDOWS_11 ? 'micaActive' : 'bg-dark';
 
@@ -42,6 +43,12 @@ let mainWindow = null;
 let configLoaded = false;
 const devEnv = app.isPackaged ? './' : './';
 const __main = path.resolve(__dirname, devEnv);
+const __data = path.join(app.getPath('documents'), 'DemeterData');
+
+if (!fs.existsSync(__data+'/firmware')) fs.mkdirSync(__data+'/firmware');
+if (!fs.existsSync(__data+'/firmware/gateway')) fs.mkdirSync(__data+'/firmware/gateway');
+if (!fs.existsSync(__data+'/firmware/mv')) fs.mkdirSync(__data+'/firmware/mv');
+if (!fs.existsSync(__data+'/firmware/madi')) fs.mkdirSync(__data+'/firmware/madi');
 
 const logger = new Logs(
 	false,
@@ -52,6 +59,13 @@ const logger = new Logs(
 )
 const config = new Config(
 	logger
+);
+
+const gateway = new Gateway(
+	logger,
+	sendGUI,
+	CFImager,
+	__data
 );
 
 /* Start App */
@@ -67,29 +81,18 @@ const config = new Config(
 		config.require('systemName', [], 'What is the name of the system');
 		config.require('loggingLevel', {'A':'All', 'D':'Debug', 'W':'Warnings', 'E':'Errors'}, 'Set logging level');
 		config.require('createLogFile', {true: 'Yes', false: 'No'}, 'Save logs to local file');
-		config.require('advancedConfig', {true: 'Yes', false: 'No'}, 'Show advanced config settings');
-		{
-			config.require('debugLineNum', {true: 'Yes', false: 'No'}, 'Print line numbers', ['advancedConfig', true]);
-			config.require('printPings', {true: 'Yes', false: 'No'}, 'Print pings', ['advancedConfig', true]);
-			config.require('devMode', {true: 'Yes', false: 'No'}, 'Dev mode - Disables connections to devices', ['advancedConfig', true]);
-		}
+		config.require('debugLineNum', {true: 'Yes', false: 'No'}, 'Print line numbers', ['advancedConfig', true]);
 
 		config.default('systemName', 'Demeter');
 		config.default('loggingLevel', 'W');
 		config.default('createLogFile', true);
-		config.default('advancedConfig', false);
 		config.default('debugLineNum', false);
-		config.default('printPings', false);
-		config.default('devMode', false);
 
 		if (!await config.fromFile(path.join(app.getPath('documents'), 'DemeterData', 'config.conf'))) {
 			config.set('systemName', 'Demeter');
 			config.set('loggingLevel', 'W');
 			config.set('createLogFile', true);
-			config.set('advancedConfig', false);
 			config.set('debugLineNum', false);
-			config.set('printPings', false);
-			config.set('devMode', false);
 			config.write(path.join(app.getPath('documents'), 'DemeterData', 'config.conf'));
 		}
 
@@ -133,13 +136,13 @@ const config = new Config(
 	console.log(error);
 });
 
-
 const ejs = new electronEjs({
 	'static': __static,
 	'background': background,
 	'version': version,
 	'systemName': config.get('systemName')
 }, {});
+
 
 
 /* Electron */
@@ -158,6 +161,15 @@ async function setUpApp() {
 			break;
 		}
 	});
+
+	ipcMain.on('gateway', (event, disks) => {
+		gateway.create(disks);
+	})
+
+	ipcMain.on('firmware', async () => {
+		const firmware = await getFirmwareObject();
+		mainWindow.webContents.send('firmware', firmware);
+	})
 
 	app.on('before-quit', function () {
 		isQuiting = true;
@@ -217,6 +229,10 @@ async function createWindow() {
 	mainWindow.loadURL(path.resolve(__main, 'views/app.ejs'));
 }
 
+function sendGUI(channel, message) {
+	mainWindow.webContents.send(channel, message);
+}
+
 async function sleep(seconds) {
 	await new Promise (resolve => setTimeout(resolve, 1000*seconds));
 }
@@ -228,75 +244,6 @@ async function checkDisks() {
 	const disks = await getDiskInfo();
 	logger.info('Disks', disks);
 	mainWindow.webContents.send('disks', disks);
-}
-
-async function createGatewayCard(driveLetter) {
-	const shell = new Shell(logger, 'FORMAT', 'D', 'cmd.exe');
-
-	const selectDiskCmd = temp.path({ suffix: '.txt' });
-	await fsPromises.writeFile(selectDiskCmd, [`SELECT VOLUME ${driveLetter}`,`LIST DISK`, `EXIT`].join('\n'));
-	const {stdout} = await shell.run(`diskpart /s "${selectDiskCmd}"`);
-	let selectedDisk;
-	stdout.forEach(row => {
-		if (row.includes("* Disk")) {
-			selectedDisk = String(row.match(/\* Disk (.*?) Online/g)).replace('* Disk ', '').replace(/\s*Online/g, '');
-			return;
-		}
-	});
-	logger.debug('Selected disk is: '+selectedDisk);
-
-	const cleanDiskCommand = temp.path({ suffix: '.txt' });
-	await fsPromises.writeFile(cleanDiskCommand, [
-		`SELECT DISK ${selectedDisk}`,
-		`CLEAN`,
-		`EXIT`
-	].join('\n'));
-	logger.debug('Cleaning disk');
-	await shell.run(`diskpart /s "${cleanDiskCommand}"`);
-
-	logger.debug('Creating new partition');
-
-	const partition32 = temp.path({ suffix: '.txt' });
-	await fsPromises.writeFile(partition32, [
-		`SELECT DISK ${selectedDisk}`,
-		`CREATE PARTITION PRIMARY SIZE=27400 OFFSET=10240`,
-		`EXIT`
-	].join('\n'));
-	const partition16 = temp.path({ suffix: '.txt' });
-	await fsPromises.writeFile(partition16, [
-		`SELECT DISK ${selectedDisk}`,
-		`CREATE PARTITION PRIMARY SIZE=12560 OFFSET=10240`,
-		`EXIT`
-	].join('\n'));
-	const partition8 = temp.path({ suffix: '.txt' });
-	await fsPromises.writeFile(partition8, [
-		`SELECT DISK ${selectedDisk}`,
-		`CREATE PARTITION PRIMARY SIZE=5550 OFFSET=10240`,
-		`EXIT`
-	].join('\n'));
-	{
-		const errorMessage = "Virtual Disk Service error:\r\nThere is not enough usable space for this operation.";
-		logger.debug('Trying to create 27GB partition');
-		const {stdout} = await shell.run(`diskpart /s "${partition32}"`);
-		if (stdout.includes(errorMessage)) {
-			logger.debug('Trying to create 12GB partition');
-			const {stdout} = await shell.run(`diskpart /s "${partition16}"`);
-			if (stdout.includes(errorMessage)) {
-				logger.debug('Trying to create 5.5GB partition');
-				const {stdout} = await shell.run(`diskpart /s "${partition8}"`);
-				if (stdout.includes(errorMessage)) {
-					logger.error('Cannot create partition');
-					return;
-				}
-			}
-		}
-	}
-
-	logger.debug('Formating new partition');
-	await shell.run(`ECHO Y | format ${driveLetter}: /FS:FAT32 /Q /X /V:UCP25_SDI`);
-	logger.debug('Copying boot files');
-	await shell.run(`${CFImager} -raw -offset 0x400 -skip 0x400 -f ipl.bin -d ${driveLetter}`);
-	logger.debug('Disk prepared');
 }
 
 async function createMVCard(driveLetter) {
@@ -391,4 +338,17 @@ function getDiskInfo() {
 		});
 		resolve(drives);
     });
+}
+
+async function getFirmwareObject() {
+	const folders = await Promise.allSettled([
+		files.readdir(__data+'/firmware/gateway'),
+		files.readdir(__data+'/firmware/mv'),
+		files.readdir(__data+'/firmware/madi')
+	]);
+	return {
+		'gateway': folders[0].value,
+		'mv': folders[1].value,
+		'madi': folders[2].value
+	}
 }

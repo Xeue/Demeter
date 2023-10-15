@@ -10,29 +10,55 @@
             const currentSystem = '<%=systemName%>';
             const version = '<%=version%>';
             const static = '<%=static%>';
+            let firmware;
         </script>
         <script type="text/javascript" src="<%-static%>/lib/jquery-3.6.0.min.js"></script>
         <script type="text/javascript" src="<%-static%>/lib/bootstrap.min.js"></script>
         <script type="text/javascript" src="<%-static%>/lib/commonWS.js"></script>
         <script type="text/javascript" src="<%-static%>/js/app.js"></script>
     </head>
-    <body class="<%-background%> overflow-hidden d-flex flex-column" id="body">
-        <nav class="drag navbar navbar-expand-lg navbar-dark bg-title px-2 m-0">
+    <body class="<%-background%> overflow-hidden d-flex flex-column" id="body" data-bs-theme="dark">
+        <nav class="drag navbar navbar-expand-lg navbar-dark bg-title px-2 pe-5 m-0">
             <a class="navbar-brand" href="#">
                 <img src="../static/img/icon/icon.svg" class="d-inline-block align-top" alt="" width="30" height="30">
                 Demeter
             </a>
+            <div class="m-auto">
+                <button id="showSelect" class="btn btn-secondary">Home</button>
+                <button id="showLogs" class="btn btn-secondary">Logs</button>
+                <button id="showFiles" class="btn btn-secondary">Firmware</button>
+            </div>
         </nav>
         <main id="demeterCont" class="overflow-hidden">
-            <section class="d-flex h-100 overflow-hidden">
+            <section id="diskSelect" class="tab d-flex h-100 overflow-hidden">
                 <div id="disks" class="flex-fill overflow-auto"></div>
                 <div id="cardType" class="overflow-auto">
-                    <div class="cardType typeGateway">UCP Gateway</div>
-                    <div class="cardType typeMV">UCP Multiview</div>
-                    <div class="cardType typeMADI d-none">UCP MADI</div>
+                    <div class="cardType" id="chooseGateway">UCP Gateway</div>
+                    <div class="cardType" id="chooseMV">UCP Multiview</div>
+                    <div class="cardType d-none" id="chooseMADI">UCP MADI</div>
                 </div>
             </section>
-            <div id="logs" class="d-none"></div>
+            <section id="diskConfig" class="h-100 overflow-auto tab d-none">
+                <div id="diskConfigList" class="gap-3 p-3"></div>
+                <div id="configControls">
+                    <button id="makeGateway" class="btn btn-success">Start</button>
+                    <button id="configCancel" class="btn btn-danger">Cancel</button>
+                </div>
+            </section>
+            <section id="diskProgress" class="tab d-none">
+
+            </section>
+            <section id="files" class="tab d-none">
+                <div>
+                    <div>Gateway</div>
+                    <div></div>
+                </div>
+                <div>
+                    <div>Multiview</div>
+                    <div></div>
+                </div>
+            </section>
+            <section id="logs" class="h-100 overflow-auto tab d-none"></section>
         </main>
     </body>
 </html>
