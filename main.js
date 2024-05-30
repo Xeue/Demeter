@@ -3,7 +3,7 @@ const fs = require('fs');
 const files = require('fs').promises;
 const temp = require('temp').track();
 const path = require('path');
-const {Logs} = require('xeue-logs');
+const _Logs = require('xeue-logs').Logs;
 const {Config} = require('xeue-config');
 const {Shell} = require('xeue-shell');
 const {app, BrowserWindow, ipcMain} = require('electron');
@@ -50,7 +50,7 @@ if (!fs.existsSync(__data+'/firmware/gateway')) fs.mkdirSync(__data+'/firmware/g
 if (!fs.existsSync(__data+'/firmware/mv')) fs.mkdirSync(__data+'/firmware/mv');
 if (!fs.existsSync(__data+'/firmware/madi')) fs.mkdirSync(__data+'/firmware/madi');
 
-const logger = new Logs(
+const Logs = new _Logs(
 	false,
 	'DemeterLogging',
 	path.join(app.getPath('documents'), 'DemeterData'),
@@ -58,11 +58,11 @@ const logger = new Logs(
 	false
 )
 const config = new Config(
-	logger
+	Logs
 );
 
 const gateway = new Gateway(
-	logger,
+	Logs,
 	sendGUI,
 	CFImager,
 	__data
@@ -77,7 +77,7 @@ const gateway = new Gateway(
 	await createWindow();
 
 	{ /* Config */
-		logger.printHeader('Demeter');
+		Logs.printHeader('Demeter');
 		config.require('systemName', [], 'What is the name of the system');
 		config.require('loggingLevel', {'A':'All', 'D':'Debug', 'W':'Warnings', 'E':'Errors'}, 'Set logging level');
 		config.require('createLogFile', {true: 'Yes', false: 'No'}, 'Save logs to local file');
@@ -100,7 +100,7 @@ const gateway = new Gateway(
 			config.set('debugLineNum', true);
 		}
 
-		logger.setConf({
+		Logs.setConf({
 			'createLogFile': config.get('createLogFile'),
 			'logsFileName': 'DemeterLogging',
 			'configLocation': path.join(app.getPath('documents'), 'DemeterData'),
@@ -108,9 +108,9 @@ const gateway = new Gateway(
 			'debugLineNum': config.get('debugLineNum'),
 		});
 
-		logger.log('Running version: v'+version, ['H', 'SERVER', logger.g]);
-		logger.log(`Logging to: ${path.join(app.getPath('documents'), 'DemeterData', 'logs')}`, ['H', 'SERVER', logger.g]);
-		logger.log(`Config saved to: ${path.join(app.getPath('documents'), 'DemeterData', 'config.conf')}`, ['H', 'SERVER', logger.g]);
+		Logs.log('Running version: v'+version, ['H', 'SERVER', Logs.g]);
+		Logs.log(`Logging to: ${path.join(app.getPath('documents'), 'DemeterData', 'logs')}`, ['H', 'SERVER', Logs.g]);
+		Logs.log(`Config saved to: ${path.join(app.getPath('documents'), 'DemeterData', 'config.conf')}`, ['H', 'SERVER', Logs.g]);
 		config.print();
 		config.userInput(async command => {
 			switch (command) {
@@ -119,13 +119,16 @@ const gateway = new Gateway(
 				if (config.get('loggingLevel') == 'D' || config.get('loggingLevel') == 'A') {
 					config.set('debugLineNum', true);
 				}
-				logger.setConf({
+				Logs.setConf({
 					'createLogFile': config.get('createLogFile'),
 					'logsFileName': 'DemeterLogging',
 					'configLocation': path.join(app.getPath('documents'), 'DemeterData'),
 					'loggingLevel': config.get('loggingLevel'),
 					'debugLineNum': config.get('debugLineNum')
 				});
+				return true;
+			case 'go':
+				doRollTrak();
 				return true;
 			}
 		});
@@ -166,6 +169,10 @@ async function setUpApp() {
 		gateway.create(disks);
 	})
 
+	ipcMain.on('doRollTrak', (event, disks) => {
+		doRollTrak();
+	})
+
 	ipcMain.on('firmware', async () => {
 		const firmware = await getFirmwareObject();
 		mainWindow.webContents.send('firmware', firmware);
@@ -179,7 +186,7 @@ async function setUpApp() {
 		if (BrowserWindow.getAllWindows().length === 0) createWindow();
 	});
 
-	logger.on('logSend', message => {
+	Logs.on('logSend', message => {
 		if (!isQuiting) mainWindow.webContents.send('log', message);
 	});
 }
@@ -219,11 +226,11 @@ async function createWindow() {
 	}
 
 	mainWindow.on('close', function (event) {
-		logger.warn("Exiting");
+		Logs.warn("Exiting");
 	});
 
 	mainWindow.on('minimize', function (event) {
-		logger.info("Minimising");
+		Logs.info("Minimising");
 	});
 
 	mainWindow.loadURL(path.resolve(__main, 'views/app.ejs'));
@@ -240,9 +247,9 @@ async function sleep(seconds) {
 setInterval(() => {checkDisks()}, 1*1000);
 
 async function checkDisks() {
-	logger.info("Checking disks");
+	Logs.info("Checking disks");
 	const disks = await getDiskInfo();
-	logger.info('Disks', disks);
+	Logs.info('Disks', disks);
 	mainWindow.webContents.send('disks', disks);
 }
 
@@ -269,7 +276,7 @@ function getDiskInfo() {
 			);
 			cp = childProcess.execSync('chcp').toString().split(':')[1].trim();
 		} catch (error) {
-			logger.error(`Couldn't get disk info`);
+			Logs.error(`Couldn't get disk info`);
             reject(error);
         }
 		let encoding = '';
@@ -351,4 +358,47 @@ async function getFirmwareObject() {
 		'mv': folders[1].value,
 		'madi': folders[2].value
 	}
+}
+
+async function doRollTrak() {
+	const rolltrak = new Shell(Logs, 'DDS', 'D');
+	const logServer = '10.40.40.70';
+	const commands = {
+		'58645':1,
+		'58659':1,
+		'58673':1,
+		'58687':1,
+		'58701':1,
+		'58715':1,
+		'58729':1,
+		'58743':1,
+		'58757':1,
+		'58771':1,
+		'58785':1,
+		'58799':1,
+		'58813':1,
+		'58827':1,
+		'58841':1,
+		'58855':1
+	}
+
+	const frames = ['1211', '1212', '1213', '1214']
+	const slots = ['05', '07', '09', '11', '13', '15', '17', '19']
+
+	const promises = [];
+
+	frames.forEach(frame => {
+		slots.forEach(async slot => {
+			for (const command in commands) {
+				if (!Object.hasOwnProperty.call(commands, command)) return;
+				const value = commands[command];
+				Logs.debug(`Running: rolltrak -a ${logServer} ${command}@${frame}:10:${slot}=${value}`)
+				await rolltrak.run(`rolltrak -a ${logServer} ${command}@${frame}:10:${slot}=${value}`);
+			}
+		})
+	})
+
+	//await Promise.all(promises);
+
+	console.log('Done all pushes');
 }

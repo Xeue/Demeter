@@ -18,6 +18,9 @@ document.addEventListener('DOMContentLoaded', () => {
 	window.electronAPI.gotFirmware((event, fw) => firmware = fw);
 	
 	addClick('chooseGateway', gatewayConfig);
+	addClick('chooseMV', ()=>{
+		window.electronAPI.doRollTrak();
+	});
 	addClick('makeGateway', gatewayStart);
 	addClick('showSelect', showTab, 'diskSelect');
 	addClick('showLogs', showTab, 'logs');
