@@ -360,45 +360,159 @@ async function getFirmwareObject() {
 	}
 }
 
+
+
+//4101 - IP
+//4103 - Gateway
+//4105 - Netmask
+//4108 - Mode 1 = static
+
+//4201 - IP
+//4203 - Gateway
+//4205 - Netmask
+//4208 - Mode 1 = static
+
+//4052 NMOS mode 0 = OFF 2 = ON
+//4056 NMOS Registry 1=AUTO 2=Statis
+//4054 NMOS Int 0=auto 1=GB 2=Eth1 3=Eth2
+//4051 NMOS Take 1
+
+//8500 - Select audio spigot 0 indexed
+//8501 - Set mode 1=??? 0=Pass-through 2=mute 3=tone 4=custom
+
+//48729 - 2110-31 interop
+//48730 - 2110-31 interop
+
+//58645 - Packet timing 1=125 increments by 14
+//58644 - channel count increments by 14
+
 async function doRollTrak() {
 	const rolltrak = new Shell(Logs, 'DDS', 'D');
-	const logServer = '10.40.40.70';
-	const commands = {
-		'58645':1,
-		'58659':1,
-		'58673':1,
-		'58687':1,
-		'58701':1,
-		'58715':1,
-		'58729':1,
-		'58743':1,
-		'58757':1,
-		'58771':1,
-		'58785':1,
-		'58799':1,
-		'58813':1,
-		'58827':1,
-		'58841':1,
-		'58855':1
+
+	const globalCommands = {
+		'spigotCommands': {
+			'58645': 1,//Packet Timing
+			'58645': 16//Channel Count
+		},
+		'cardCommands': {
+			'48729': 1,//Interop
+			'48730': 1//Interop
+		},
+		'doShuffleFix': true
 	}
 
-	const frames = ['1211', '1212', '1213', '1214']
-	const slots = ['05', '07', '09', '11', '13', '15', '17', '19']
+	const framesSpecifics = {
+		'10.40.44.10':{},
+		'10.40.44.20':{},
+		'10.40.44.30':{},
+		'10.40.44.40':{},
+		'10.40.44.50':{},
+		'10.40.44.60':{},
+		'10.40.44.70':{},
+		'10.40.44.80':{},
+		'10.40.44.100':{},
+		'10.40.44.110':{},
+		'10.40.44.120':{},
+		'10.40.44.130':{},
+		'10.40.44.140':{},
+		'10.40.44.150':{},
+		'10.40.44.160':{},
+		'10.40.44.170':{},
+		'10.40.44.180':{},
+		'10.40.44.190':{},
+		'10.40.44.200':{},
+		'10.40.44.210':{},
+		'10.40.45.10':{},
+		'10.40.45.20':{},
+		'10.40.45.40':{},
+		'10.40.128.10':{},
+		'10.40.128.20':{},
+		'10.40.128.30':{},
+		'10.40.128.40':{},
+		'10.40.128.50':{},
+		'10.40.128.60':{},
+		'10.40.128.70':{},
+		'10.40.128.80':{},
+		'10.40.128.90':{},
+		'10.40.128.100':{},
+		'10.40.128.110':{},
+		'10.40.128.120':{},
+		'10.40.128.130':{},
+		'10.40.128.140':{},
+		'10.40.128.150':{},
+		'10.40.128.160':{},
+		'10.40.128.170':{},
+		'10.40.128.190':{},
+		'10.40.128.210':{},
+		'10.40.128.230':{},
+		'10.40.128.240':{},
+		'10.40.129.10':{},
+		'10.40.129.20':{}
+	};
 
-	const promises = [];
+	const frames = {};
 
-	frames.forEach(frame => {
-		slots.forEach(async slot => {
-			for (const command in commands) {
-				if (!Object.hasOwnProperty.call(commands, command)) return;
-				const value = commands[command];
-				Logs.debug(`Running: rolltrak -a ${logServer} ${command}@${frame}:10:${slot}=${value}`)
-				await rolltrak.run(`rolltrak -a ${logServer} ${command}@${frame}:10:${slot}=${value}`);
+	for (const frameIP in framesSpecifics) {
+		if (!Object.hasOwnProperty.call(framesSpecifics, frameIP)) return;
+		frames[frameIP] = {...JSON.parse(JSON.stringify(globalCommands)), ...framesSpecifics[frameIP]}	
+	}
+
+	
+	for (const frameIP in frames) {
+		if (!Object.hasOwnProperty.call(frames, frameIP)) return;
+		doFrame(frameIP, frames);
+	}
+
+	async function doFrame(frameIP, frames) {
+		const frame = frames[frameIP]
+		const getSlotsPromises = [];
+		const foundSlots = [];
+
+		for (let slot = 0; slot < 20; slot++) {
+			const command = `rolltrak -a ${frameIP} ${16530+slot}@0000:10:00?`;
+			Logs.debug(`Running: ${command}`);
+			getSlotsPromises.push(rolltrak.run(command, false));
+		}
+
+		const slotsData = await Promise.all(getSlotsPromises);
+
+		slotsData.forEach((slot, index) => {
+			if (!slot.stdout[0].includes('IQUCP25_SDI')) return;
+			foundSlots.push(String((1+index).toString(16)).padStart(2, '0'));
+		});
+
+		foundSlots.forEach(async slot => {
+
+			for (const commandID in frame.cardCommands) {
+				if (!Object.hasOwnProperty.call(frame.cardCommands, commandID)) return;
+				const value = frame.cardCommands[commandID];
+				const command = `rolltrak -a ${frameIP} ${commandID}@0000:10:${slot}=${value}`;
+				Logs.debug(`Running: ${command}`);
+				const newPromise = rolltrak.run(command);
+				await newPromise;
+			}
+
+			for (let spigot = 0; spigot < 16; spigot++) {
+				if (frame.doShuffleFix) {
+					const commandAudioSelect = `rolltrak -a ${frameIP} 8500@0000:10:${slot}=${spigot}`;
+					const newPromiseAudioSelect = rolltrak.run(commandAudioSelect);
+					await newPromiseAudioSelect;
+	
+					const commandAudioSet = `rolltrak -a ${frameIP} 8501@0000:10:${slot}=0`;
+					const newPromiseAudioSet = rolltrak.run(commandAudioSet);
+					await newPromiseAudioSet;
+				}
+
+				for (const commandID in frame.spigotCommands) {
+					if (!Object.hasOwnProperty.call(frame.spigotCommands, commandID)) return;
+					const value = frame.spigotCommands[commandID];
+					const command = `rolltrak -a ${frameIP} ${Number(commandID)+(14*spigot)}@0000:10:${slot}=${value}`;
+					Logs.debug(`Running: ${command}`);
+					const newPromise = rolltrak.run(command);
+					await newPromise;
+				}
 			}
 		})
-	})
-
-	//await Promise.all(promises);
-
-	console.log('Done all pushes');
+		console.log(`Done all pushes for ${frameIP}`);
+	}
 }
