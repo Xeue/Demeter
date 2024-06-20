@@ -1,7 +1,5 @@
 /* eslint-disable no-unused-vars */
-const fs = require('fs');
-const files = require('fs').promises;
-const temp = require('temp').track();
+
 const path = require('path');
 const _Logs = require('xeue-logs').Logs;
 const {Config} = require('xeue-config');
@@ -10,19 +8,10 @@ const {app, BrowserWindow, ipcMain} = require('electron');
 const {version} = require('./package.json');
 const electronEjs = require('electron-ejs');
 const {MicaBrowserWindow, IS_WINDOWS_11} = require('mica-electron');
-const iconvLite = require("iconv-lite");
-const childProcess = require("child_process");
-const {Gateway} = require('./modules/gateway');
 
 const background = IS_WINDOWS_11 ? 'micaActive' : 'bg-dark';
 
 const __static = __dirname+'/static';
-
-const CFImager = path.join(
-	__dirname,
-	"lib",
-	"CFImager.exe"
-).replace("app.asar", "app.asar.unpacked");
 
 Array.prototype.symDiff = function(x) {
 	return this.filter(y => !x.includes(y)).concat(x => !y.includes(x));
@@ -40,32 +29,19 @@ Array.prototype.diff = function(x) {
 
 let isQuiting = false;
 let mainWindow = null;
-let configLoaded = false;
 const devEnv = app.isPackaged ? './' : './';
 const __main = path.resolve(__dirname, devEnv);
 const __data = path.join(app.getPath('documents'), 'DemeterData');
 
-if (!fs.existsSync(__data+'/firmware')) fs.mkdirSync(__data+'/firmware');
-if (!fs.existsSync(__data+'/firmware/gateway')) fs.mkdirSync(__data+'/firmware/gateway');
-if (!fs.existsSync(__data+'/firmware/mv')) fs.mkdirSync(__data+'/firmware/mv');
-if (!fs.existsSync(__data+'/firmware/madi')) fs.mkdirSync(__data+'/firmware/madi');
-
 const Logs = new _Logs(
 	false,
 	'DemeterLogging',
-	path.join(app.getPath('documents'), 'DemeterData'),
+	__data,
 	'D',
 	false
 )
 const config = new Config(
 	Logs
-);
-
-const gateway = new Gateway(
-	Logs,
-	sendGUI,
-	CFImager,
-	__data
 );
 
 /* Start App */
@@ -88,12 +64,12 @@ const gateway = new Gateway(
 		config.default('createLogFile', true);
 		config.default('debugLineNum', false);
 
-		if (!await config.fromFile(path.join(app.getPath('documents'), 'DemeterData', 'config.conf'))) {
+		if (!await config.fromFile(path.join(__data, 'config.conf'))) {
 			config.set('systemName', 'Demeter');
 			config.set('loggingLevel', 'W');
 			config.set('createLogFile', true);
 			config.set('debugLineNum', false);
-			config.write(path.join(app.getPath('documents'), 'DemeterData', 'config.conf'));
+			config.write(path.join(__data, 'config.conf'));
 		}
 
 		if (config.get('loggingLevel') == 'D' || config.get('loggingLevel') == 'A') {
@@ -103,26 +79,26 @@ const gateway = new Gateway(
 		Logs.setConf({
 			'createLogFile': config.get('createLogFile'),
 			'logsFileName': 'DemeterLogging',
-			'configLocation': path.join(app.getPath('documents'), 'DemeterData'),
+			'configLocation': __data,
 			'loggingLevel': config.get('loggingLevel'),
 			'debugLineNum': config.get('debugLineNum'),
 		});
 
 		Logs.log('Running version: v'+version, ['H', 'SERVER', Logs.g]);
-		Logs.log(`Logging to: ${path.join(app.getPath('documents'), 'DemeterData', 'logs')}`, ['H', 'SERVER', Logs.g]);
-		Logs.log(`Config saved to: ${path.join(app.getPath('documents'), 'DemeterData', 'config.conf')}`, ['H', 'SERVER', Logs.g]);
+		Logs.log(`Logging to: ${path.join(__data, 'logs')}`, ['H', 'SERVER', Logs.g]);
+		Logs.log(`Config saved to: ${path.join(__data, 'config.conf')}`, ['H', 'SERVER', Logs.g]);
 		config.print();
 		config.userInput(async command => {
 			switch (command) {
 			case 'config':
-				await config.fromCLI(path.join(app.getPath('documents'), 'DemeterData', 'config.conf'));
+				await config.fromCLI(path.join(__data, 'config.conf'));
 				if (config.get('loggingLevel') == 'D' || config.get('loggingLevel') == 'A') {
 					config.set('debugLineNum', true);
 				}
 				Logs.setConf({
 					'createLogFile': config.get('createLogFile'),
 					'logsFileName': 'DemeterLogging',
-					'configLocation': path.join(app.getPath('documents'), 'DemeterData'),
+					'configLocation': __data,
 					'loggingLevel': config.get('loggingLevel'),
 					'debugLineNum': config.get('debugLineNum')
 				});
@@ -165,17 +141,20 @@ async function setUpApp() {
 		}
 	});
 
-	ipcMain.on('gateway', (event, disks) => {
-		gateway.create(disks);
+	ipcMain.on('recieve', (event, data) => {
+		Logs.object(data);
+		switch (data.command) {
+			case 'frames':
+				sendGUI('request')
+				break;
+		
+			default:
+				break;
+		}
 	})
 
 	ipcMain.on('doRollTrak', (event, disks) => {
 		doRollTrak();
-	})
-
-	ipcMain.on('firmware', async () => {
-		const firmware = await getFirmwareObject();
-		mainWindow.webContents.send('firmware', firmware);
 	})
 
 	app.on('before-quit', function () {
@@ -193,8 +172,8 @@ async function setUpApp() {
 
 async function createWindow() {
 	const windowOptions = {
-		width: 1440,
-		height: 720,
+		width: 1640,
+		height: 1220,
 		autoHideMenuBar: true,
 		webPreferences: {
 			contextIsolation: true,
@@ -244,122 +223,6 @@ async function sleep(seconds) {
 	await new Promise (resolve => setTimeout(resolve, 1000*seconds));
 }
 
-setInterval(() => {checkDisks()}, 1*1000);
-
-async function checkDisks() {
-	Logs.info("Checking disks");
-	const disks = await getDiskInfo();
-	Logs.info('Disks', disks);
-	mainWindow.webContents.send('disks', disks);
-}
-
-async function createMVCard(driveLetter) {
-
-}
-
-async function createMadiCard(driveLetter) {
-
-}
-
-function getDiskInfo() {
-    return new Promise((resolve, reject) => {
-		const drives = [];
-		let buffer;
-		let cp;
-        try {
-			buffer = childProcess.execSync(
-				'wmic logicaldisk get Caption,FreeSpace,Size,VolumeSerialNumber,Description,VolumeName /format:list',
-				{
-					windowsHide: true,
-					encoding: 'buffer'
-				}
-			);
-			cp = childProcess.execSync('chcp').toString().split(':')[1].trim();
-		} catch (error) {
-			Logs.error(`Couldn't get disk info`);
-            reject(error);
-        }
-		let encoding = '';
-		switch (cp) {
-			case '65000': // UTF-7
-				encoding = 'UTF-7';
-				break;
-			case '65001': // UTF-8
-				encoding = 'UTF-8';
-				break;
-			default: // Other Encoding
-				if (/^-?[\d.]+(?:e-?\d+)?$/.test(cp)) {
-					encoding = 'cp' + cp;
-				} else {
-					encoding = cp;
-				}
-		}
-		buffer = iconvLite.encode(iconvLite.decode(buffer, encoding), 'UTF-8');
-		const lines = buffer.toString().split('\r\r\n');
-		let newDiskIteration = false;
-		let caption = '';
-		let description = '';
-		let freeSpace = 0;
-		let size = 0;
-		let name = '';
-		lines.forEach(value => {
-			if (value !== '') {
-				const [section, data] = value.split('=');
-				switch (section) {
-					case 'Caption':
-						caption = data;
-						newDiskIteration = true;
-						break;
-					case 'Description':
-						description = data;
-						break;
-					case 'FreeSpace':
-						freeSpace = isNaN(parseFloat(data)) ? 0 : +data;
-						break;
-					case 'Size':
-						size = isNaN(parseFloat(data)) ? 0 : +data;
-						break;
-					case 'VolumeName':
-						name = data;
-						break;
-				}
-			} else {
-				if (!newDiskIteration) return;
-				const used = (size - freeSpace);
-				const percent = size > 0 ? Math.round((used / size) * 100) + '%' : '0%';
-				drives.push({
-					'filesystem': description,
-					'blocks': size,
-					'used': used,
-					'available': freeSpace,
-					'capacity': percent,
-					'mounted': caption,
-					'name': name
-				});
-				newDiskIteration = false;
-				caption = '';
-				description = '';
-				freeSpace = 0;
-				size = 0;
-			}
-		});
-		resolve(drives);
-    });
-}
-
-async function getFirmwareObject() {
-	const folders = await Promise.allSettled([
-		files.readdir(__data+'/firmware/gateway'),
-		files.readdir(__data+'/firmware/mv'),
-		files.readdir(__data+'/firmware/madi')
-	]);
-	return {
-		'gateway': folders[0].value,
-		'mv': folders[1].value,
-		'madi': folders[2].value
-	}
-}
-
 
 
 //4101 - IP
@@ -398,7 +261,7 @@ async function getFirmwareObject() {
 //58645 - Packet timing 1=125 increments by 14
 //58644 - channel count increments by 14
 
-async function doRollTrak() {
+async function doRollTrak2() {
 	const rolltrak = new Shell(Logs, 'DDS', 'D');
 	for (let index = 0; index < 70000; index++) {		
 		const command = `rolltrak -a 10.40.42.161 ${index}@0000:30:00?`;
@@ -407,7 +270,7 @@ async function doRollTrak() {
 	//Logs.debug(`Running: ${command}`);
 }
 
-async function doRollTrak2() {
+async function doRollTrak() {
 	const rolltrak = new Shell(Logs, 'DDS', 'D');
 
 	const globalCommands = {
@@ -418,11 +281,15 @@ async function doRollTrak2() {
 		'cardCommands': {
 			// '48729': 1,//Interop
 			// '48730': 1//Interop
-			'4501': 3,
-			'21000': 1,
-			'21046':1,
-			'21047':1,
-			'21074':3
+			// '4501': 3,//Reference
+			// '21000': 1,//PTP
+			// '21046':1,//PTP Eth1
+			// '21047':1,//PTP Eth2
+			// '21074':3//PTP Reference
+			'4052':2,//NMOS Mode
+			'4056':2,//NMOS Registry
+			'4054':3,//NMOS Interface
+			'4051':1//NMOS Take
 		},
 		// 'doShuffleFix': true
 	}
@@ -452,115 +319,116 @@ async function doRollTrak2() {
 		// '10.40.45.20':{},
 		// '10.40.45.40':{},
 		// '10.40.128.10':{},
-		// '10.40.128.20':{},
+		'10.40.128.20':{},
 		// '10.40.128.30':{},
-		// '10.40.128.40':{},
+		'10.40.128.40':{},
 		// '10.40.128.50':{},
-		// '10.40.128.60':{},
+		'10.40.128.60':{},
 		// '10.40.128.70':{},
-		// '10.40.128.80':{},
+		'10.40.128.80':{},
 		// '10.40.128.90':{},
-		// '10.40.128.100':{},
+		'10.40.128.100':{},
 		// '10.40.128.110':{},
-		// '10.40.128.120':{},
+		'10.40.128.120':{},
 		// '10.40.128.130':{},
-		// '10.40.128.140':{},
+		'10.40.128.140':{},
 		// '10.40.128.150':{},
-		// '10.40.128.160':{},
+		'10.40.128.160':{},
 		// '10.40.128.170':{},
 		// '10.40.128.190':{},
 		// '10.40.128.210':{},
 		// '10.40.128.230':{},
-		// '10.40.128.240':{},
+		'10.40.128.240':{},
 		// '10.40.129.10':{},
-		// '10.40.129.20':{}
+		'10.40.129.20':{}
 	};
 
 	const cardSpecifics = {
-		'10.40.42.11':{},
-		'10.40.42.12':{},
-		'10.40.42.13':{},
-		'10.40.42.14':{},
-		'10.40.42.21':{},
-		'10.40.42.22':{},
-		'10.40.42.23':{},
-		'10.40.42.24':{},
-		'10.40.42.31':{},
-		'10.40.42.32':{},
-		'10.40.42.33':{},
-		'10.40.42.34':{},
-		'10.40.42.41':{},
-		'10.40.42.42':{},
-		'10.40.42.43':{},
-		'10.40.42.44':{},
-		'10.40.42.51':{},
-		'10.40.42.52':{},
-		'10.40.42.53':{},
-		'10.40.42.54':{},
-		'10.40.42.61':{},
-		'10.40.42.62':{},
-		'10.40.42.63':{},
-		'10.40.42.64':{},
-		'10.40.42.71':{},
-		'10.40.42.72':{},
-		'10.40.42.73':{},
-		'10.40.42.74':{},
-		'10.40.42.81':{},
-		'10.40.42.82':{},
-		'10.40.42.83':{},
-		'10.40.42.84':{},
-		'10.40.42.91':{},
-		'10.40.42.92':{},
-		'10.40.42.93':{},
-		'10.40.42.94':{},
-		'10.40.42.101':{},
-		'10.40.42.102':{},
-		'10.40.42.103':{},
-		'10.40.42.104':{},
-		'10.40.42.111':{},
-		'10.40.42.112':{},
-		'10.40.42.113':{},
-		'10.40.42.114':{},
-		'10.40.42.121':{},
-		'10.40.42.122':{},
-		'10.40.42.123':{},
-		'10.40.42.124':{},
-		'10.40.42.131':{},
-		'10.40.42.132':{},
-		'10.40.42.133':{},
-		'10.40.42.134':{},
-		'10.40.42.141':{},
-		'10.40.42.142':{},
-		'10.40.42.143':{},
-		'10.40.42.144':{},
-		'10.40.42.151':{},
-		'10.40.42.152':{},
-		'10.40.42.153':{},
-		'10.40.42.154':{},
-		'10.40.42.161':{},
-		'10.40.42.162':{},
-		'10.40.42.163':{},
-		'10.40.42.164':{},
-		'10.40.42.171':{},
-		'10.40.42.172':{},
-		'10.40.42.173':{},
-		'10.40.42.174':{},
-		'10.40.42.181':{},
-		'10.40.42.182':{},
-		'10.40.42.183':{},
-		'10.40.42.184':{},
-		'10.40.42.191':{},
-		'10.40.42.192':{},
-		'10.40.42.193':{},
-		'10.40.42.194':{},
-		'10.40.42.201':{},
-		'10.40.42.202':{},
-		'10.40.42.203':{},
-		'10.40.42.204':{}
+		// '10.40.42.11':{},
+		// '10.40.42.12':{},
+		// '10.40.42.13':{},
+		// '10.40.42.14':{},
+		// '10.40.42.21':{},
+		// '10.40.42.22':{},
+		// '10.40.42.23':{},
+		// '10.40.42.24':{},
+		// '10.40.42.31':{},
+		// '10.40.42.32':{},
+		// '10.40.42.33':{},
+		// '10.40.42.34':{},
+		// '10.40.42.41':{},
+		// '10.40.42.42':{},
+		// '10.40.42.43':{},
+		// '10.40.42.44':{},
+		// '10.40.42.51':{},
+		// '10.40.42.52':{},
+		// '10.40.42.53':{},
+		// '10.40.42.54':{},
+		// '10.40.42.61':{},
+		// '10.40.42.62':{},
+		// '10.40.42.63':{},
+		// '10.40.42.64':{},
+		// '10.40.42.71':{},
+		// '10.40.42.72':{},
+		// '10.40.42.73':{},
+		// '10.40.42.74':{},
+		// '10.40.42.81':{},
+		// '10.40.42.82':{},
+		// '10.40.42.83':{},
+		// '10.40.42.84':{},
+		// '10.40.42.91':{},
+		// '10.40.42.92':{},
+		// '10.40.42.93':{},
+		// '10.40.42.94':{},
+		// '10.40.42.101':{},
+		// '10.40.42.102':{},
+		// '10.40.42.103':{},
+		// '10.40.42.104':{},
+		// '10.40.42.111':{},
+		// '10.40.42.112':{},
+		// '10.40.42.113':{},
+		// '10.40.42.114':{},
+		// '10.40.42.121':{},
+		// '10.40.42.122':{},
+		// '10.40.42.123':{},
+		// '10.40.42.124':{},
+		// '10.40.42.131':{},
+		// '10.40.42.132':{},
+		// '10.40.42.133':{},
+		// '10.40.42.134':{},
+		// '10.40.42.141':{},
+		// '10.40.42.142':{},
+		// '10.40.42.143':{},
+		// '10.40.42.144':{},
+		// '10.40.42.151':{},
+		// '10.40.42.152':{},
+		// '10.40.42.153':{},
+		// '10.40.42.154':{},
+		// '10.40.42.161':{},
+		// '10.40.42.162':{},
+		// '10.40.42.163':{},
+		// '10.40.42.164':{},
+		// '10.40.42.171':{},
+		// '10.40.42.172':{},
+		// '10.40.42.173':{},
+		// '10.40.42.174':{},
+		// '10.40.42.181':{},
+		// '10.40.42.182':{},
+		// '10.40.42.183':{},
+		// '10.40.42.184':{},
+		// '10.40.42.191':{},
+		// '10.40.42.192':{},
+		// '10.40.42.193':{},
+		// '10.40.42.194':{},
+		// '10.40.42.201':{},
+		// '10.40.42.202':{},
+		// '10.40.42.203':{},
+		// '10.40.42.204':{}
 	}
 
 	const frames = {};
 	const cards = {};
+	const framesPromises = [];
 
 	for (const frameIP in framesSpecifics) {
 		if (!Object.hasOwnProperty.call(framesSpecifics, frameIP)) return;
@@ -574,7 +442,7 @@ async function doRollTrak2() {
 	
 	for (const frameIP in frames) {
 		if (!Object.hasOwnProperty.call(frames, frameIP)) return;
-		doFrame(frameIP, frames);
+		framesPromises.push(doFrame(frameIP, frames));
 	}
 
 	for (const cardIP in cards) {
@@ -582,62 +450,77 @@ async function doRollTrak2() {
 		doCard(cardIP, cards);
 	}
 
+	await Promise.all(framesPromises);
+	Logs.log('All commands complete')
+
 	async function doFrame(frameIP, frames) {
 		const frame = frames[frameIP]
 		const getSlotsPromises = [];
 		const foundSlots = [];
-
+		const checking = [];
+	
 		for (let slot = 0; slot < 20; slot++) {
 			const command = `rolltrak -a ${frameIP} ${16530+slot}@0000:10:00?`;
 			Logs.debug(`Running: ${command}`);
+			checking.push({'slot':slot,'ip':frameIP});
 			getSlotsPromises.push(rolltrak.run(command, false));
 		}
-
+	
 		const slotsData = await Promise.all(getSlotsPromises);
-
+	
 		slotsData.forEach((slot, index) => {
-			if (!slot.stdout[0].includes('IQUCP25_SDI')) return;
-			foundSlots.push(String((1+index).toString(16)).padStart(2, '0'));
+			try {
+				if (!slot.stdout[0].includes('IQUCP25_SDI')) return;
+				foundSlots.push(String((1+index).toString(16)).padStart(2, '0'));
+			} catch (error) {
+				Logs.warn(`Issue with slot: ${checking[index].slot} at IP: ${checking[index].ip}`, error);
+			}
 		});
+	
+		const slotsPromises = [];
 
 		foundSlots.forEach(async slot => {
-
-			for (const commandID in frame.cardCommands) {
-				if (!Object.hasOwnProperty.call(frame.cardCommands, commandID)) return;
-				const value = frame.cardCommands[commandID];
-				const command = `rolltrak -a ${frameIP} ${commandID}@0000:10:${slot}=${value}`;
-				Logs.debug(`Running: ${command}`);
-				const newPromise = rolltrak.run(command);
-				await newPromise;
-			}
-
-			for (let spigot = 0; spigot < 16; spigot++) {
-				if (frame.doShuffleFix) {
-					const commandAudioSelect = `rolltrak -a ${frameIP} 8500@0000:10:${slot}=${spigot}`;
-					const newPromiseAudioSelect = rolltrak.run(commandAudioSelect);
-					await newPromiseAudioSelect;
-	
-					const commandAudioSet = `rolltrak -a ${frameIP} 8501@0000:10:${slot}=0`;
-					const newPromiseAudioSet = rolltrak.run(commandAudioSet);
-					await newPromiseAudioSet;
-				}
-
-				for (const commandID in frame.spigotCommands) {
-					if (!Object.hasOwnProperty.call(frame.spigotCommands, commandID)) return;
-					const value = frame.spigotCommands[commandID];
-					const command = `rolltrak -a ${frameIP} ${Number(commandID)+(14*spigot)}@0000:10:${slot}=${value}`;
+			const slotPromise = new Promise(async (resolve, reject)=>{
+				for (const commandID in frame.cardCommands) {
+					if (!Object.hasOwnProperty.call(frame.cardCommands, commandID)) return;
+					const value = frame.cardCommands[commandID];
+					const command = `rolltrak -a ${frameIP} ${commandID}@0000:10:${slot}=${value}`;
 					Logs.debug(`Running: ${command}`);
 					const newPromise = rolltrak.run(command);
 					await newPromise;
 				}
-			}
+	
+				for (let spigot = 0; spigot < 16; spigot++) {
+					if (frame.doShuffleFix) {
+						const commandAudioSelect = `rolltrak -a ${frameIP} 8500@0000:10:${slot}=${spigot}`;
+						const newPromiseAudioSelect = rolltrak.run(commandAudioSelect);
+						await newPromiseAudioSelect;
+		
+						const commandAudioSet = `rolltrak -a ${frameIP} 8501@0000:10:${slot}=0`;
+						const newPromiseAudioSet = rolltrak.run(commandAudioSet);
+						await newPromiseAudioSet;
+					}
+	
+					for (const commandID in frame.spigotCommands) {
+						if (!Object.hasOwnProperty.call(frame.spigotCommands, commandID)) return;
+						const value = frame.spigotCommands[commandID];
+						const command = `rolltrak -a ${frameIP} ${Number(commandID)+(14*spigot)}@0000:10:${slot}=${value}`;
+						Logs.debug(`Running: ${command}`);
+						const newPromise = rolltrak.run(command);
+						await newPromise;
+					}
+				}
+				resolve();
+			})
+			slotsPromises.push(slotPromise);
 		})
-		console.log(`Done all pushes for ${frameIP}`);
+		await Promise.all(slotsPromises);
+		Logs.log(`Done all pushes for ${frameIP}`);
 	}
-
+	
 	async function doCard(cardIP, cards) {
 		const card = cards[cardIP]
-
+	
 		for (const commandID in card.cardCommands) {
 			if (!Object.hasOwnProperty.call(card.cardCommands, commandID)) return;
 			const value = card.cardCommands[commandID];
@@ -646,18 +529,18 @@ async function doRollTrak2() {
 			const newPromise = rolltrak.run(command);
 			await newPromise;
 		}
-
+	
 		// for (let spigot = 0; spigot < 16; spigot++) {
 		// 	if (card.doShuffleFix) {
 		// 		const commandAudioSelect = `rolltrak -a ${cardIP} 8500@0000:30:00=${spigot}`;
 		// 		const newPromiseAudioSelect = rolltrak.run(commandAudioSelect);
 		// 		await newPromiseAudioSelect;
-
+	
 		// 		const commandAudioSet = `rolltrak -a ${cardIP} 8501@0000:30:00=0`;
 		// 		const newPromiseAudioSet = rolltrak.run(commandAudioSet);
 		// 		await newPromiseAudioSet;
 		// 	}
-
+	
 		// 	for (const commandID in frame.spigotCommands) {
 		// 		if (!Object.hasOwnProperty.call(frame.spigotCommands, commandID)) return;
 		// 		const value = frame.spigotCommands[commandID];

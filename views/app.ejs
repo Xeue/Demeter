@@ -26,37 +26,10 @@
             <div class="m-auto">
                 <button id="showSelect" class="btn btn-secondary">Home</button>
                 <button id="showLogs" class="btn btn-secondary">Logs</button>
-                <button id="showFiles" class="btn btn-secondary">Firmware</button>
             </div>
         </nav>
         <main id="demeterCont" class="overflow-hidden">
-            <section id="diskSelect" class="tab d-flex h-100 overflow-hidden">
-                <div id="disks" class="flex-fill overflow-auto"></div>
-                <div id="cardType" class="overflow-auto">
-                    <div class="cardType" id="chooseGateway">UCP Gateway</div>
-                    <div class="cardType" id="chooseMV">UCP Multiview</div>
-                    <div class="cardType d-none" id="chooseMADI">UCP MADI</div>
-                </div>
-            </section>
-            <section id="diskConfig" class="h-100 overflow-auto tab d-none">
-                <div id="diskConfigList" class="gap-3 p-3"></div>
-                <div id="configControls">
-                    <button id="makeGateway" class="btn btn-success">Start</button>
-                    <button id="configCancel" class="btn btn-danger">Cancel</button>
-                </div>
-            </section>
-            <section id="diskProgress" class="tab d-none">
-
-            </section>
-            <section id="files" class="tab d-none">
-                <div>
-                    <div>Gateway</div>
-                    <div></div>
-                </div>
-                <div>
-                    <div>Multiview</div>
-                    <div></div>
-                </div>
+            <section id="addDevices" class="tab d-flex h-100 overflow-hidden">
             </section>
             <section id="logs" class="h-100 overflow-auto tab d-none"></section>
         </main>

@@ -1,27 +1,11 @@
 document.addEventListener('DOMContentLoaded', () => {
 	window.electronAPI.log((event, log) => doLog(log));
+	window.electronAPI.request('frames');
+	window.electronAPI.receive((event, data) => receiveData(data));
 
-	window.electronAPI.disks((event, disks) => doDisks(disks));
-
-	window.electronAPI.progress((event, message) => {
-		const _progress = document.getElementById('diskProgress');
-		if (message.letter == "GENERAL") {
-			if (message.status == "started") {
-				showTab('diskProgress');
-			}
-		} else {
-			_progress.innerHTML += `<div>${JSON.stringify(message)}</div>`;
-		}
-	})
-
-	window.electronAPI.getFirmware();
-	window.electronAPI.gotFirmware((event, fw) => firmware = fw);
-	
-	addClick('chooseGateway', gatewayConfig);
 	addClick('chooseMV', ()=>{
 		window.electronAPI.doRollTrak();
 	});
-	addClick('makeGateway', gatewayStart);
 	addClick('showSelect', showTab, 'diskSelect');
 	addClick('showLogs', showTab, 'logs');
 	addClick('showFiles', showTab, 'files');
@@ -29,110 +13,12 @@ document.addEventListener('DOMContentLoaded', () => {
 	addClick('configCancel', showTab, 'diskSelect');
 });
 
-function doDisks(disks) {
-	const _disks = document.getElementById('disks');
-	const _allDisks = document.getElementsByClassName('activeDisk');
-	for (let _disk of _allDisks) {
-		_disk.classList.remove('activeDisk')
-		_disk.classList.add('inactiveDisk')
-	}
-	disks.forEach(disk => {
-		const diskLetter = String(disk.mounted).replace(':','');
-		const _diskCont = document.getElementById(`disk-${diskLetter}`);
-		let type = String(disk.filesystem).replace(/ /g,'');
-		let disabled = '';
-		let checked = '';
-		switch (diskLetter) {
-			case 'C':
-				type = 'LocalFixedDiskC'
-				disabled = 'disabled';
-				break;
-			case 'D':
-				//checked = 'checked'
-				break;
-		}
-		if (_diskCont) {
-			_diskCont.classList.add('activeDisk');
-			_diskCont.classList.remove('inactiveDisk');
-			document.querySelector(`#disk-${diskLetter} .diskName`).innerHTML = `${disk.name} - ${disk.filesystem}`;
-			document.querySelector(`#disk-${diskLetter} .diskLetter`).innerHTML = `(${diskLetter})`;
-			document.querySelector(`#disk-${diskLetter} .diskCapacity`).setAttribute('style', `--capacity: ${disk.capacity};`);
-			document.querySelector(`#disk-${diskLetter} .diskSpace`).innerHTML = `${convertBytes(disk.available)} free of ${convertBytes(disk.blocks)}`;
-		} else {
-			_disks.innerHTML += `<section
-			id="disk-${diskLetter}"
-			class="diskCard text-light activeDisk d-flex align-items-center"
-				data-letter="${diskLetter}">
-				<div class="diskIcon ${type}"></div>
-				<div class="d-flex flex-column flex-fill me-4">
-					<div>
-						<span class="diskName">${disk.name} - ${disk.filesystem}</span>
-						<span class="diskLetter">(${diskLetter})</span>
-					</div>
-					<div class="diskCapacity" style="--capacity: ${disk.capacity};"></div>
-					<div class="diskSpace">${convertBytes(disk.available)} free of ${convertBytes(disk.blocks)}</div>
-				</div>
-				<input type="checkbox" ${disabled} ${checked} class="form-check-input me-4 mt-0">
-			</section>`;
-		}
-	});
-	const __inactiveDisks = document.getElementsByClassName('inactiveDisk');
-	for (let _disk of __inactiveDisks) {
-		_disk.remove();
-	}
+
+
+
+function receiveData(data) {
+
 }
-
-function gatewayConfig() {
-	showTab('diskConfig');
-	const __disks = document.querySelectorAll('.diskCard:has(input:checked)');
-	const _cont = document.getElementById('diskConfigList');
-	_cont.innerHTML = "";
-	let options = '<option selected hidden disabled value="none">Select</option>';
-
-	firmware.gateway.forEach(file => {
-		options += `<option value="${file}">${file}</option>`;
-	});
-
-	for (let _disk of __disks) {
-		_cont.innerHTML +=  `<section class="configItem card" data-letter="${_disk.dataset.letter}">
-			<div class="card-header">Disk: ${_disk.dataset.letter}</div>
-			<div class="card-body">
-				<div class="d-flex">
-					<input type="checkbox" class="configCopy" id="config-disk-${_disk.dataset.letter}">
-					<label for="config-disk-${_disk.dataset.letter}">Attempt to restore existing IPs and config</label>
-				</div>
-				<div class="d-flex">
-					<input id="config-diskFW-${_disk.dataset.letter}" type="checkbox" class="configFirmware">
-					<label for="config-diskFW-${_disk.dataset.letter}">Load firmware</label>
-					<select id="config-selectFW-${_disk.dataset.letter}" class="configFirmwareSelect form-select form-select-sm w-auto">${options}</select>
-				</div>
-			</div>
-		</section>`;
-	}
-}
-
-function gatewayStart() {
-	const __disks = document.getElementsByClassName('configItem');
-	const disks = [];
-	for (let _disk of __disks) {
-		const letter = _disk.dataset.letter
-		const restoreConfig = document.getElementById('config-disk-'+letter).checked;
-		const firmware = document.getElementById('config-diskFW-'+letter).checked;
-		const firmwareVersion = firmware ? document.getElementById('config-selectFW-'+letter).value : null;
-		disks.push({
-			'letter': letter,
-			'config': restoreConfig,
-			'firmware': firmware,
-			'firmwareVersion': firmwareVersion
-		});
-	}
-	window.electronAPI.gatewayTx(disks);
-}
-
-
-
-
-
 
 
 
