@@ -8,6 +8,7 @@ const {app, BrowserWindow, ipcMain} = require('electron');
 const {version} = require('./package.json');
 const electronEjs = require('electron-ejs');
 const {MicaBrowserWindow, IS_WINDOWS_11} = require('mica-electron');
+const { error } = require('console');
 
 const background = IS_WINDOWS_11 ? 'micaActive' : 'bg-dark';
 
@@ -259,6 +260,8 @@ async function sleep(seconds) {
 
 //48729 - 2110-31 interop
 //48730 - 2110-31 interop
+//48700 - Extender headers audio
+//48703 - Extender headers meta
 
 //58645 - Packet timing 1=125 increments by 14
 //58644 - channel count increments by 14
@@ -281,67 +284,69 @@ async function doRollTrak() {
 
 	const globalCommands = {
 		'spigotCommands': {
-			// '58644': 16,//Channel Count
-			// '58645': 1,//Packet Timing
-			// '50007': 1,
+			'58644': 16,// Channel Count
+			'58645': 1, // Packet Timing
+			'50007': 1, // Extended Headers
 			// 'take': true
 		},
 
 		//58714 = channel
 		//58715 = timing
 		'cardCommands': {
-			// '48729': 1,//Interop
-			// '48730': 1//Interop
+			'48729': 1,//Interop
+			'48730': 1,//Interop
 			// '4501': 3, // Ref Chassis
 			// '21000': 1, // PTP Multicast
 			// '21046':1, // PTP Eth 1
 			// '21047':1, // PTP Eth 2
 			// '21074':3  // PTP Best
+			'48700': 0, // Audio extended headers
+			'48703': 0  // Meta extended headers
 		},
 		'doShuffleFix': true
 	}
 
 	const framesSpecifics = {
-		// '10.40.44.10':{},
-		// '10.40.44.20':{},
-		// '10.40.44.30':{},
-		// '10.40.44.40':{},
-		// '10.40.44.50':{},
-		// '10.40.44.60':{},
-		// '10.40.44.70':{},
-		// '10.40.44.80':{},
-		// '10.40.44.140':{},
-		// '10.40.44.150':{},
-		// '10.40.44.160':{},
-		// '10.40.44.170':{},
-		// '10.40.44.180':{},
-		// '10.40.44.190':{},
-		// '10.40.44.210':{},
-		// '10.40.46.130':{},
-		// '10.40.46.140':{},
-		// '10.40.128.10':{},
-		// '10.40.128.20':{},
-		// '10.40.128.30':{},
+		'10.40.44.10':{},
+		'10.40.44.20':{},
+		'10.40.44.30':{},
+		'10.40.44.40':{},
+		'10.40.44.50':{},
+		'10.40.44.60':{},
+		'10.40.44.70':{},
+		'10.40.44.80':{},
+		'10.40.44.140':{},
+		'10.40.44.150':{},
+		'10.40.44.160':{},
+		'10.40.44.170':{},
+		'10.40.44.180':{},
+		'10.40.44.190':{},
+		'10.40.44.210':{},
+		'10.40.46.130':{},
+		'10.40.46.140':{},
+		'10.40.128.10':{},
+		'10.40.128.20':{},
+		'10.40.128.30':{},
 		'10.40.128.40':{},
-		// '10.40.128.50':{},
-		// '10.40.128.60':{},
-		// '10.40.128.70':{},
-		// '10.40.128.80':{},
-		// '10.40.128.90':{},
-		// '10.40.128.100':{},
-		// '10.40.128.110':{},
-		// '10.40.128.120':{},
-		// '10.40.128.130':{},
-		// '10.40.128.140':{},
-		// '10.40.128.150':{},
-		// '10.40.128.160':{},
-		// '10.40.128.170':{},
-		// '10.40.128.190':{},
-		// '10.40.128.210':{},
-		// '10.40.128.230':{},
-		// '10.40.128.240':{},
-		// '10.40.129.10':{},
-		// '10.40.129.20':{}
+		'10.40.128.50':{},
+		'10.40.128.60':{},
+		'10.40.128.70':{},
+		'10.40.128.80':{},
+		'10.40.128.90':{},
+		'10.40.128.100':{},
+		'10.40.128.110':{},
+		'10.40.128.120':{},
+		'10.40.128.130':{},
+		'10.40.128.140':{},
+		'10.40.128.150':{},
+		'10.40.128.160':{},
+		'10.40.128.170':{},
+		'10.40.128.190':{},
+		'10.40.128.210':{},
+		'10.40.128.230':{},
+		'10.40.128.240':{},
+		'10.40.129.10':{},
+		'10.40.129.20':{}
 	};
 
 	const cardSpecifics = {
@@ -462,26 +467,27 @@ async function doRollTrak() {
 
 	async function doFrame(frameIP, frames) {
 		const frame = frames[frameIP]
-		//const getSlotsPromises = [];
 		const foundSlots = [];
 		const checking = [];
-		const slotsData = [];
 		
 		Logs.log(`Get slots for frame ${frameIP}`);
 
-		const unitAddress = await getInfo(17044, frameIP, '00');
-		const address = unitAddress.split('= 0x')[1];
+		const unitAddress = await getInfo(17044, frameIP, '00', '00');
+		const address = unitAddress.split('= 0x')[1] || '10';
 
+		let command = `rolltrak -a ${frameIP} 0@0000:${address}:10?`;
+		
 		for (let slot = 0; slot < 20; slot++) {
-			checking.push({'slot':slot,'ip':frameIP});
-			slotsData.push(await getInfo(16530+slot, frameIP, '00', address));
+			command += ` ${16530 + slot}@0000:${address}:00?`;
 		}
-	
-		//const slotsData = await Promise.all(getSlotsPromises);
+
+		Logs.debug(`Running: ${command}`);
+		const {stdout} = await rolltrak.run(command, false);
+		const slotsData = parseTrackData(stdout);
 
 		Logs.log(`All slots found for frame ${frameIP}`);
 	
-		Logs.object(slotsData);
+		Logs.debug('Found slots', slotsData);
 
 		slotsData.forEach((slot, index) => {
 			try {
@@ -492,57 +498,79 @@ async function doRollTrak() {
 			}
 		});
 	
+		Logs.object(foundSlots);
+
 		const slotsPromises = [];
 
 		foundSlots.forEach(async slot => {
-
 			slotsPromises.push(new Promise(async (resolve, reject) => {
+				const cardIP = await getInfo(4101, frameIP, slot, address);
+				if (!cardIP) return reject('No card IP found');
+				const cardSlot = '00';
+				const cardAddress = '30';
+
+				const commands = [];
+
 				for (const commandID in frame.cardCommands) {
 					if (!Object.hasOwnProperty.call(frame.cardCommands, commandID)) return;
-					const value = frame.cardCommands[commandID];
-					const command = `rolltrak -a ${frameIP} ${commandID}@0000:${address}:${slot}=${value}`;
-					Logs.debug(`Running: ${command}`);
-					await rolltrak.run(command);
+					commands.push({
+						'command': `${commandID}@0000:${cardAddress}:${cardSlot}`,
+						'value': frame.cardCommands[commandID]
+					})
 				}
 
-				const IOString = await getInfo(18000, frameIP, slot);
+				const IOString = await getInfo(18000, cardIP, cardSlot, cardAddress);
 				const [[string, ins, outs]] = IOString.matchAll(/([0-9]{1,2}) In.*?([0-9]{1,2}) Out/g);
 
 				Logs.log(`Processing ${ins} ins`);
 
 				if (frame.doShuffleFix) {
 					for (let spigot = 0; spigot < 16; spigot++) {	
-						const commandAudioSelect = `rolltrak -a ${frameIP} 8500@0000:${address}:${slot}=${spigot}`;
-						Logs.debug(`Running: ${commandAudioSelect}`);
-						await rolltrak.run(commandAudioSelect);
-		
-						const commandAudioSet = `rolltrak -a ${frameIP} 8501@0000:${address}:${slot}=0`;
-						Logs.debug(`Running: ${commandAudioSet}`);
-						await rolltrak.run(commandAudioSet);
+						commands.push({'command': `8500@0000:${cardAddress}:${cardSlot}`, 'value': spigot, 'noCheck': true});
+						commands.push({'command': `8501@0000:${cardAddress}:${cardSlot}`, 'value': 0, 'noCheck': true});
 					}
 				}
 
-				for (let spigot = 0; spigot < ins; spigot++) {	
+				for (let spigot = 0; spigot < ins; spigot++) {
 					for (const commandID in frame.spigotCommands) {
 						if (!Object.hasOwnProperty.call(frame.spigotCommands, commandID)) return;
 						const value = frame.spigotCommands[commandID];
 						let incrementor = 14;
 						if (commandID == 'take') {
 							incrementor = 300;
-							const command1 = `rolltrak -a ${frameIP} ${55040+(incrementor*spigot)}@0000:${address}:${slot}=1`;
-							Logs.debug(`Running: ${command1}`);
-							await rolltrak.run(command1);
-							const command2 = `rolltrak -a ${frameIP} ${55040+(incrementor*spigot)}@0000:${address}:${slot}=0`;
-							Logs.debug(`Running: ${command2}`);
-							await rolltrak.run(command2);
+							commands.push({'command': `${55040+(incrementor*spigot)}@0000:${cardAddress}:${cardSlot}`, 'value': 1, 'noCheck': true});
+							commands.push({'command': `${55040+(incrementor*spigot)}@0000:${cardAddress}:${cardSlot}`, 'value': 0, 'noCheck': true});
 						} else {
 							if (['50007'].includes(commandID)) incrementor = 300;
-							const command = `rolltrak -a ${frameIP} ${Number(commandID)+(incrementor*spigot)}@0000:${address}:${slot}=${value}`;
-							Logs.debug(`Running: ${command}`);
-							await rolltrak.run(command);
+							commands.push({'command': `${Number(commandID)+(incrementor*spigot)}@0000:${cardAddress}:${cardSlot}`, 'value': value});
 						}
 					}
 				}
+				const toRun = commands.map(command => `${command.command}=${command.value}`).join(' ');
+				Logs.debug(`Running: rolltrak -a ${cardIP} ${toRun}`);
+				await rolltrak.run(`rolltrak -a ${cardIP} ${toRun}`, false);
+
+				const toCheckArr = commands.filter(command => !command.noCheck);
+				const toCheck = toCheckArr.map(command => `${command.command}?`).join(' ');
+
+				Logs.debug(`Running: rolltrak -a ${cardIP} 0@0000:${cardAddress}:${cardSlot}? ${toCheck}`);
+				const {stdout} = await rolltrak.run(`rolltrak -a ${cardIP} 0@0000:${cardAddress}:${cardSlot}? ${toCheck}`, false);
+				stdout.shift();
+				const results = stdout.map(row => row.split('\t')[6]);
+				const reCheck = [];
+				toCheckArr.forEach((command, index) => {
+					if (results[index] != String(command.value)) reCheck.push(command);
+				})
+
+				if (reCheck.length > 0) {
+					Logs.warn(`${reCheck.length} commands failed, attempting to retry`);
+					const toRun = reCheck.map(command => `${command.command}=${command.value}`).join(' ');
+					Logs.debug(`Re-Running: rolltrak -a ${cardIP} ${toRun}`);
+					await rolltrak.run(`rolltrak -a ${cardIP} ${toRun}`, false);
+				} else {
+					Logs.debug('All commands sucessfull');
+				}
+
 				resolve();
 			}))
 
@@ -618,5 +646,23 @@ async function getInfo(commandID, frameIP, slot, address = '10') {
 	} catch (error) {
 		Logs.warn(`Issue getting info from slot ${slot} at IP: ${frameIP}`, error);
 		return '';
+	}
+}
+
+function parseTrackData(rows) {
+	try {
+		if (rows[0].includes('No rollcall connection')) {
+			Logs.warn('Rollcall connection timeout');
+			return [];
+		}
+		if (rows.length < 2) {
+			Logs.warn('Not enough rows returned');
+			return [];
+		}
+		rows.shift();
+		return rows.map(row => row.split('\t')[7])
+	} catch (error) {
+		Logs.warn('Issue parsing data', error);
+		return [];
 	}
 }
