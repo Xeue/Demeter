@@ -4,11 +4,12 @@ const path = require('path');
 const _Logs = require('xeue-logs').Logs;
 const {Config} = require('xeue-config');
 const {Shell} = require('xeue-shell');
-const {app, BrowserWindow, ipcMain} = require('electron');
+const {app, BrowserWindow, ipcMain: frontend} = require('electron');
 const {version} = require('./package.json');
 const electronEjs = require('electron-ejs');
 const {MicaBrowserWindow, IS_WINDOWS_11} = require('mica-electron');
-const { error } = require('console');
+const JSON5 = require('json5')
+const fs = require('fs');
 
 const background = IS_WINDOWS_11 ? 'micaActive' : 'bg-dark';
 
@@ -44,6 +45,12 @@ const Logs = new _Logs(
 const config = new Config(
 	Logs
 );
+
+const commandsJSON = fs.readFileSync(path.join(__main, 'commandsDB.json'));
+const commandsDB = JSON5.parse(commandsJSON);
+
+const frames = {};
+const cards = {};
 
 /* Start App */
 
@@ -104,9 +111,6 @@ const config = new Config(
 					'debugLineNum': config.get('debugLineNum')
 				});
 				return true;
-			case 'go':
-				doRollTrak();
-				return true;
 			}
 		});
 		configLoaded = true;
@@ -122,7 +126,8 @@ const ejs = new electronEjs({
 	'static': __static,
 	'background': background,
 	'version': version,
-	'systemName': config.get('systemName')
+	'systemName': config.get('systemName'),
+	'commands': commandsDB
 }, {});
 
 
@@ -131,7 +136,10 @@ const ejs = new electronEjs({
 
 
 async function setUpApp() {
-	ipcMain.on('window', (event, message) => {
+
+	frontend.send = (command, data) => mainWindow.webContents.send(command, data);
+
+	frontend.on('window', (event, message) => {
 		switch (message) {
 		case 'exit':
 			app.quit();
@@ -144,20 +152,11 @@ async function setUpApp() {
 		}
 	});
 
-	ipcMain.on('recieve', (event, data) => {
-		Logs.object(data);
-		switch (data.command) {
-			case 'frames':
-				sendGUI('request')
-				break;
-		
-			default:
-				break;
-		}
-	})
-
-	ipcMain.on('doRollTrak', (event, disks) => {
-		doRollTrak();
+	frontend.on('addFrame', (event, data) => {
+		frames[data.ip] = {"number":data.number, "name": data.name};
+		frontend.send('frames', frames);
+		Logs.object(frames);
+		checkFrame(data.ip);
 	})
 
 	app.on('before-quit', function () {
@@ -169,7 +168,7 @@ async function setUpApp() {
 	});
 
 	Logs.on('logSend', message => {
-		if (!isQuiting) mainWindow.webContents.send('log', message);
+		if (!isQuiting) frontend.send('log', message);
 	});
 }
 
@@ -218,10 +217,6 @@ async function createWindow() {
 	mainWindow.loadURL(path.resolve(__main, 'views/app.ejs'));
 }
 
-function sendGUI(channel, message) {
-	mainWindow.webContents.send(channel, message);
-}
-
 async function sleep(seconds) {
 	await new Promise (resolve => setTimeout(resolve, 1000*seconds));
 }
@@ -266,16 +261,110 @@ async function sleep(seconds) {
 //58645 - Packet timing 1=125 increments by 14
 //58644 - channel count increments by 14
 
-async function doRollTrak2() {
-	const rolltrak = new Shell(Logs, 'DDS', 'D');
-	for (let index = 0; index < 70000; index++) {		
-		const command = `rolltrak -a 10.40.42.161 ${index}@0000:30:00?`;
-		await rolltrak.run(command, true);
+async function checkFrame(frameIP) {
+	const rolltrak = new Shell(Logs, 'CHECK', 'D');
+	rolltrak.on('stdout', stdout=>{
+		//Logs.log(stdout);
+	})
+
+	const frame = frames[frameIP]
+	const foundSlots = [];
+	const checking = [];
+
+	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Getting rollcall address of frame'});
+	const unitAddress = await getInfo(17044, frameIP, '00', '00');
+	const address = unitAddress.split('= 0x')[1] || '10';
+
+	let command = `rolltrak -a ${frameIP} 0@0000:${address}:10?`;
+		
+	for (let slot = 0; slot < 20; slot++) {
+		command += ` ${16530 + slot}@0000:${address}:00?`;
 	}
-	//Logs.debug(`Running: ${command}`);
+
+	Logs.debug(command);
+	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Discovering cards within frame'});
+	const {stdout} = await rolltrak.run(command, false);
+	const slotsData = parseTrackData(stdout);
+
+	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Checking cards current config'});
+	slotsData.forEach((slot, index) => {
+		try {
+			if (!slot.includes('IQUCP25_SDI')) return;
+			foundSlots.push(String((1+index).toString(16)).padStart(2, '0'));
+		} catch (error) {
+			Logs.warn(`Issue with slot: ${checking[index].slot} at IP: ${checking[index].ip}`, error);
+		}
+	});
+
+	const slotsPromises = [];
+
+	foundSlots.forEach(async slot => {
+		slotsPromises.push(new Promise(async (resolve, reject) => {
+			const slotInfo = {};
+			const cardIPA = await getInfo(4101, frameIP, slot, address);
+			slotInfo.ipa = cardIPA ? cardIPA : null;
+			const cardIPB = await getInfo(4201, frameIP, slot, address);
+			slotInfo.ipb = cardIPB ? cardIPB : null;
+
+			let requestIP = frameIP;
+			let requestSlot = slot;
+			let requestAddress = address;
+			if (cardIPB) {
+				requestIP = cardIPB
+				requestSlot = '00';
+				requestAddress = '30';
+			}
+			if (cardIPA) {
+				requestIP = cardIPA
+				requestSlot = '00';
+				requestAddress = '30';
+			}
+
+			const IOString = await getInfo(18000, requestIP, requestSlot, requestAddress);
+			const [[string, ins, outs]] = IOString.matchAll(/([0-9]{1,2}) In.*?([0-9]{1,2}) Out/g);
+			slotInfo.ins = ins;
+			slotInfo.outs = outs;
+			slotInfo.commands = {};
+
+			let commands = [];
+
+			commandsDB.card.forEach(group => {
+				group.commands.forEach(command => {
+					if (command.command != "shuffle") commands.push(command.command);
+				})
+			});
+			
+			const toCheck = commands.map(command => `${command}@0000:${requestAddress}:${requestSlot}?`).join(' ');
+
+			Logs.debug(`rolltrak -a ${requestIP} 0@0000:${requestAddress}:${requestSlot}? ${toCheck}`);
+			const {stdout} = await rolltrak.run(`rolltrak -a ${requestIP} 0@0000:${requestAddress}:${requestSlot}? ${toCheck}`, false);
+			stdout.shift();
+			rows = stdout.join("\r\n").split("\r\n");
+			rows.forEach(row => {
+				const values = row.split('\t').filter(n=>n);
+				slotInfo.commands[values[5]] = values[6];
+			})
+			resolve(slotInfo);
+		}))
+
+	})
+	const slotsInfo = await Promise.all(slotsPromises);
+	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Retrieved current cards and config'});
+	const returnData = {
+		"frameIP": frameIP,
+		"slots": {}
+	};
+	foundSlots.forEach((slot, index) => returnData.slots[slot] = {
+		"type": 'IQUCP25_SDI',
+		"commands": slotsInfo[index].commands,
+		"ins": slotsInfo[index].ins,
+		"outs": slotsInfo[index].outs
+	})
+	frontend.send('slotInfo', returnData);
 }
 
 async function doRollTrak() {
+	return;
 	const rolltrak = new Shell(Logs, 'DDS', 'D');
 
 	rolltrak.on('stdout', stdout=>{
@@ -290,8 +379,6 @@ async function doRollTrak() {
 			// 'take': true
 		},
 
-		//58714 = channel
-		//58715 = timing
 		'cardCommands': {
 			'48729': 1,//Interop
 			'48730': 1,//Interop
@@ -307,46 +394,46 @@ async function doRollTrak() {
 	}
 
 	const framesSpecifics = {
-		'10.40.44.10':{},
-		'10.40.44.20':{},
-		'10.40.44.30':{},
-		'10.40.44.40':{},
-		'10.40.44.50':{},
-		'10.40.44.60':{},
-		'10.40.44.70':{},
-		'10.40.44.80':{},
-		'10.40.44.140':{},
-		'10.40.44.150':{},
-		'10.40.44.160':{},
-		'10.40.44.170':{},
-		'10.40.44.180':{},
-		'10.40.44.190':{},
-		'10.40.44.210':{},
-		'10.40.46.130':{},
-		'10.40.46.140':{},
-		'10.40.128.10':{},
-		'10.40.128.20':{},
-		'10.40.128.30':{},
-		'10.40.128.40':{},
-		'10.40.128.50':{},
-		'10.40.128.60':{},
-		'10.40.128.70':{},
-		'10.40.128.80':{},
-		'10.40.128.90':{},
-		'10.40.128.100':{},
-		'10.40.128.110':{},
-		'10.40.128.120':{},
-		'10.40.128.130':{},
-		'10.40.128.140':{},
-		'10.40.128.150':{},
-		'10.40.128.160':{},
-		'10.40.128.170':{},
-		'10.40.128.190':{},
-		'10.40.128.210':{},
-		'10.40.128.230':{},
-		'10.40.128.240':{},
-		'10.40.129.10':{},
-		'10.40.129.20':{}
+		// '10.40.44.10':{},
+		'10.40.44.20':{"number":2},
+		// '10.40.44.30':{},
+		// '10.40.44.40':{},
+		// '10.40.44.50':{},
+		// '10.40.44.60':{},
+		// '10.40.44.70':{},
+		// '10.40.44.80':{},
+		// '10.40.44.140':{},
+		// '10.40.44.150':{},
+		// '10.40.44.160':{},
+		// '10.40.44.170':{},
+		// '10.40.44.180':{},
+		// '10.40.44.190':{},
+		// '10.40.44.210':{},
+		// '10.40.46.130':{},
+		// '10.40.46.140':{},
+		// '10.40.128.10':{},
+		// '10.40.128.20':{},
+		// '10.40.128.30':{},
+		// '10.40.128.40':{},
+		// '10.40.128.50':{},
+		// '10.40.128.60':{},
+		// '10.40.128.70':{},
+		// '10.40.128.80':{},
+		// '10.40.128.90':{},
+		// '10.40.128.100':{},
+		// '10.40.128.110':{},
+		// '10.40.128.120':{},
+		// '10.40.128.130':{},
+		// '10.40.128.140':{},
+		// '10.40.128.150':{},
+		// '10.40.128.160':{},
+		// '10.40.128.170':{},
+		// '10.40.128.190':{},
+		// '10.40.128.210':{},
+		// '10.40.128.230':{},
+		// '10.40.128.240':{},
+		// '10.40.129.10':{},
+		// '10.40.129.20':{}
 	};
 
 	const cardSpecifics = {

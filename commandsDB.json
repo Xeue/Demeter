@@ -1,0 +1,307 @@
+{
+    "card": [
+        {
+            "name": "Ethernet 1 Settings",
+            "commands": [{
+                    "command": 4108,
+                    "name": "Mode",
+                    "type": "select",
+                    "options": {
+                        "Static":1,
+                        "DHCP":0
+                    }
+                },{
+                    "command": 4101,
+                    "name": "IP",
+                    "type": "smartip",
+                    "depends": {"4108":1}
+                },{
+                    "command": 4103,
+                    "name": "Gateway",
+                    "type": "smartip",
+                    "depends": {"4108":1}
+                },{
+                    "command": 4105,
+                    "name": "Netmask",
+                    "type": "smartip",
+                    "depends": {"4108":1}
+                }]
+        },{
+            "name": "Ethernet 2 Settings",
+            "commands": [{
+                    "command": 4208,
+                    "name": "Mode",
+                    "type": "select",
+                    "options": {
+                        "Static":1,
+                        "DHCP":0
+                    }
+                },{
+                    "command": 4201,
+                    "name": "IP",
+                    "type": "smartip",
+                    "depends": {"4208":1}
+                },{
+                    "command": 4203,
+                    "name": "Gateway",
+                    "type": "smartip",
+                    "depends": {"4208":1}
+                },{
+                    "command": 4205,
+                    "name": "Netmask",
+                    "type": "smartip",
+                    "depends": {"4208":1}
+                }]
+        },{
+            "name": "Reference/PTP",
+            "commands": [{
+                    "command": 4501,
+                    "name": "Reference Source",
+                    "type": "select",
+                    "options": {
+                        "PTP":1,
+                        "Chassis A":3,
+                        "Chassis B":4
+                    }
+                },{
+                    "command": 21000,
+                    "name": "PTP",
+                    "type": "select",
+                    "options": {
+                        "Multicast":1,
+                        "Unicast":2,
+                        "Freerun":0,
+                        "NTP":3
+                    },
+                    "depends": {"4501":1}
+                },{
+                    "command": 21010,
+                    "name": "PTP Domain",
+                    "type": "text",
+                    "default": 127,
+                    "depends": {"4501":1}
+                },{
+                    "command": 21013,
+                    "name": "PTP Multicast Address",
+                    "type": "text",
+                    "depends": {"4501":1, "21000":1}
+                },{
+                    "command": 21074,
+                    "name": "PTP Preference",
+                    "type": "select",
+                    "options": {
+                        "Best":3,
+                        "Ethernet 1":0,
+                        "Ethermet 2":1,
+                        "None":2
+                    },
+                    "depends": {"4501":1}
+                },{
+                    "command": 21046,
+                    "name": "Enable PTP on Ethernet 1",
+                    "type": "boolean",
+                    "default": true,
+                    "depends": {"4501":1}
+                },{
+                    "command": 21047,
+                    "name": "Enable PTP on Ethernet 2",
+                    "type": "boolean",
+                    "default": true,
+                    "depends": {"4501":1}
+                }]
+        },{
+            "name": "NMOS Settings",
+            "commands": [{
+                    "command": 4052,
+                    "name": "Enabled",
+                    "type": "boolean",
+                    "default": true
+                },{
+                    "command": 4056,
+                    "name": "Registry",
+                    "type": "select",
+                    "options": {
+                        "Auto":1,
+                        "Static":2
+                    },
+                    "depends": {"4052":true}
+                },{
+                    "command": 4054,
+                    "name": "Interface",
+                    "type": "select",
+                    "options": {
+                        "Ethernet 1":2,
+                        "Ethernet 2":3,
+                        "Control":1,
+                        "Auto":0
+                    },
+                    "depends": {"4052":true}
+                },{
+                    "command": 4051,
+                    "name": "Netmask",
+                    "type": "text",
+                    "depends": {"4052":true}
+                }]
+        },{
+            "name": "Interop",
+            "commands": [{
+                    "command": 48729,
+                    "name": "Disable ST2110-30 Senders",
+                    "type": "boolean",
+                    "default": true
+                },{
+                    "command": 48730,
+                    "name": "Disable ST2110-30 Recievers",
+                    "type": "boolean",
+                    "default": true
+                },{
+                    "command": 48700,
+                    "name": "Extender headers audio",
+                    "type": "boolean",
+                    "default": true
+                },{
+                    "command": 48703,
+                    "name": "Extender headers meta",
+                    "type": "boolean",
+                    "default": true
+                }]
+        },{
+            "name": "Audio",
+            "commands": [
+                {
+                    "command": "shuffle",
+                    "name": "Spigot Shuffling",
+                    "type": "select",
+                    "options": {
+                        "Pass-through":0,
+                        "Mute":2,
+                        "Tone":3,
+                        "Custom":4
+                    }
+                }
+            ]
+        }
+    ],
+    "spigot": [
+        {
+            "name": "Interop",
+            "commands": [{
+                    "command": 50007,
+                    "name": "Extended Headers",
+                    "type": "boolean",
+                    "default": true,
+                    "increment": 300
+                },{
+                "command": 50034,
+                "name": "Number of flows",
+                "type": "select",
+                "increment": 300,
+                "options": {
+                    "1":1,
+                    "2":2,
+                    "4":4
+                }
+            }]
+        },{
+            "name": "Audio Setting",
+            "commands": [{
+                    "command":50123,
+                    "name": "IP",
+                    "type": "smartip",
+                    "increment": 300
+                },{
+                    "command":50125,
+                    "name": "Port",
+                    "type": "text",
+                    "default": 5004,
+                    "increment": 300
+                },{
+                    "command":50127,
+                    "name": "Source IP",
+                    "type": "smartip",
+                    "increment": 300
+                },{
+                    "command":50129,
+                    "name": "Source Port",
+                    "type": "text",
+                    "default": 5004,
+                    "increment": 300
+                },{
+                    "command":50132,
+                    "name": "Flow Type",
+                    "type": "select",
+                    "increment": 300,
+                    "options": {
+                        "None":0,
+                        "2110-30":4
+                    }
+                },{
+                    "command": 58645,
+                    "name": "Packet Timing",
+                    "type": "select",
+                    "increment": 14,
+                    "options": {
+                        "125us":1,
+                        "250us":2,
+                        "500us":3,
+                        "1ms":4,
+                        "4ms":5
+                    }
+                },{
+                    "command": 58644,
+                    "name": "Channel Count",
+                    "type": "select",
+                    "increment": 14,
+                    "options": {
+                        "1":1,
+                        "2":2,
+                        "4":4,
+                        "8":8,
+                        "16":16,
+                        "32":32,
+                        "64":64
+                    }
+                }]
+        },{
+            "name": "Video Settings",
+            "commands": [{
+                    "command":50083,
+                    "name": "IP",
+                    "type": "smartip",
+                    "increment": 300
+                },{
+                    "command":50085,
+                    "name": "Port",
+                    "type": "text",
+                    "default": 50100,
+                    "increment": 300
+                },{
+                    "command":50087,
+                    "name": "Source IP",
+                    "type": "smartip",
+                    "increment": 300
+                },{
+                    "command":50089,
+                    "name": "Source Port",
+                    "type": "text",
+                    "default": 50100,
+                    "increment": 300
+                },{
+                    "command":50092,
+                    "name": "Flow Type",
+                    "type": "select",
+                    "increment": 300,
+                    "options": {
+                        "None":0,
+                        "2110-20":2
+                    }
+            }]
+        }
+    ]
+}
+
+
+
+
+//8500 - Select audio spigot 0 indexed
+//8501 - Set mode 1=??? 0=Pass-through 2=mute 3=tone 4=custom

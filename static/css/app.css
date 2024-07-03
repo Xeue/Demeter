@@ -290,3 +290,51 @@ body.micaActive {
    bottom: 1rem;
    position: fixed;
 }
+
+
+
+
+
+.groupCommands {
+   display: none;
+   flex-wrap: wrap;
+   padding: 1rem;
+}
+
+.groupCont:has(.groupEnable:checked) .groupCommands {
+   display: block;
+}
+
+.frameCont header,
+.groupCont header {
+   display: flex;
+   padding: 1rem;
+   background: #69696930;
+   align-items: center;
+}
+
+.frameCont,
+.groupCont {
+   background: #ffffff0d;
+   margin: 1rem;
+   border-radius: 5px;
+   overflow: hidden;
+}
+
+.commandCont {
+   margin: 5px;
+   display: grid;
+   grid-template-columns: 2.2rem 1fr 3fr;
+   text-align: left;
+   align-items: center;
+}
+
+.commandEnabled:not(:checked) ~* {
+   color: dimgrey;
+   opacity: 0.5;
+   cursor: not-allowed;
+   pointer-events: none;
+}
+
+.octet {
+}

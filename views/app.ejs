@@ -10,6 +10,7 @@
             const currentSystem = '<%=systemName%>';
             const version = '<%=version%>';
             const static = '<%=static%>';
+            const commands = <%-JSON.stringify(commands)%>;
             let firmware;
         </script>
         <script type="text/javascript" src="<%-static%>/lib/jquery-3.6.0.min.js"></script>
@@ -24,13 +25,24 @@
                 Demeter
             </a>
             <div class="m-auto">
-                <button id="showSelect" class="btn btn-secondary">Home</button>
+                <button id="showSelect" class="btn btn-secondary">Frames</button>
+                <button id="showCommands" class="btn btn-secondary">Global Cards Config</button>
                 <button id="showLogs" class="btn btn-secondary">Logs</button>
             </div>
         </nav>
         <main id="demeterCont" class="overflow-hidden">
-            <section id="addDevices" class="tab d-flex h-100 overflow-hidden">
+            <section id="addDevices" class="tab h-100 overflow-auto">
+                <div class="p-2 d-flex">
+                    <input class="form-control me-2" id="addFrameIP" type="text" placeholder="Frame IP">
+                    <input class="form-control me-2" id="addFrameNumber" type="text" placeholder="Frame Number (optional)">
+                    <input class="form-control me-2" id="addFrameName" type="text" placeholder="Frame Name (optional)">
+                    <button class="form-control btn btn-primary" id="addFrameIPBtn">Add</button>
+                </div>
+                <article id="framesCont">
+
+                </article>
             </section>
+            <section id="cardCommands" class="tab h-100 overflow-auto"></section>
             <section id="logs" class="h-100 overflow-auto tab d-none"></section>
         </main>
     </body>
