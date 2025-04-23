@@ -298,17 +298,18 @@ body.micaActive {
 .groupCommands {
    display: none;
    flex-wrap: wrap;
-   padding: 1rem;
+   padding: 0.1rem;
+   padding-left: 1rem;
 }
 
-.groupCont:has(.groupEnable:checked) .groupCommands {
+header:has(.groupEnable:checked) + .groupCommands {
    display: block;
 }
 
 .frameCont header,
 .groupCont header {
    display: flex;
-   padding: 1rem;
+   padding-inline: 0.3rem;
    background: #69696930;
    align-items: center;
 }
@@ -316,7 +317,7 @@ body.micaActive {
 .frameCont,
 .groupCont {
    background: #ffffff0d;
-   margin: 1rem;
+   margin: 0.3rem;
    border-radius: 5px;
    overflow: hidden;
 }

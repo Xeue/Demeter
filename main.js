@@ -31,6 +31,8 @@ Array.prototype.diff = function(x) {
 
 let isQuiting = false;
 let mainWindow = null;
+let jobs = 0;
+const pollRate = 5;
 const devEnv = app.isPackaged ? './' : './';
 const __main = path.resolve(__dirname, devEnv);
 const __data = path.join(app.getPath('documents'), 'DemeterData');
@@ -50,7 +52,24 @@ const commandsJSON = fs.readFileSync(path.join(__main, 'commandsDB.json'));
 const commandsDB = JSON5.parse(commandsJSON);
 
 const frames = {};
-const cards = {};
+/*
+	IP: {
+		number: number,
+		name: string,
+		ip: string,
+		doPush: boolean,
+		slots: [
+			0: {
+				type: string,
+				ins: number,
+				outs: number,
+				commands: {
+					key: value
+				}
+			}
+		]
+	}
+*/
 
 /* Start App */
 
@@ -116,6 +135,7 @@ const cards = {};
 		configLoaded = true;
 	}
 
+	startLoops();
 	doRollTrak();
 
 })().catch(error => {
@@ -153,10 +173,21 @@ async function setUpApp() {
 	});
 
 	frontend.on('addFrame', (event, data) => {
-		frames[data.ip] = {"number":data.number, "name": data.name};
+		if (frames[data.ip]) {
+			frames[data.ip].number = data.number;
+			frames[data.ip].name = data.name;
+			frames[data.ip].ip = data.ip;
+		} else {
+			frames[data.ip] = {
+				"number":data.number,
+				"name": data.name,
+				"ip": data.ip,
+				"doPush": false,
+			};
+		}
 		frontend.send('frames', frames);
-		Logs.object(frames);
-		checkFrame(data.ip);
+		Logs.debug('Added/updated frame', frames);
+		// checkFrame(data.ip);
 	})
 
 	app.on('before-quit', function () {
@@ -222,6 +253,10 @@ async function sleep(seconds) {
 }
 
 
+//4052 NMOS mode 0 = OFF 2 = ON
+//4056 NMOS Registry 1=AUTO 2=Statis
+//4054 NMOS Int 0=auto 1=GB 2=Eth1 3=Eth2
+//4051 NMOS Take 1
 
 //4101 - IP
 //4103 - Gateway
@@ -235,10 +270,8 @@ async function sleep(seconds) {
 
 //4501 - Reference - 3-Chassis A, 4-Chassis B, 1-Network
 
-//4052 NMOS mode 0 = OFF 2 = ON
-//4056 NMOS Registry 1=AUTO 2=Statis
-//4054 NMOS Int 0=auto 1=GB 2=Eth1 3=Eth2
-//4051 NMOS Take 1
+//8500 - Select audio spigot 0 indexed
+//8501 - Set mode 1=??? 0=Pass-through 2=mute 3=tone 4=custom
 
 //21000 PTP 0=Freerun, 1=Multicast, 2=Unicast, 3=NTP
 //21046 - Enable PTP on Eth 1
@@ -249,9 +282,6 @@ async function sleep(seconds) {
 //21013 - PTP Multicast Address
 
 //21074 - PTP Preference 0=Eth1, 1=Eth2, 2=None, 3=Best
-
-//8500 - Select audio spigot 0 indexed
-//8501 - Set mode 1=??? 0=Pass-through 2=mute 3=tone 4=custom
 
 //48729 - 2110-31 interop
 //48730 - 2110-31 interop
@@ -281,7 +311,7 @@ async function checkFrame(frameIP) {
 		command += ` ${16530 + slot}@0000:${address}:00?`;
 	}
 
-	Logs.debug(command);
+	Logs.info(command);
 	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Discovering cards within frame'});
 	const {stdout} = await rolltrak.run(command, false);
 	const slotsData = parseTrackData(stdout);
@@ -300,50 +330,21 @@ async function checkFrame(frameIP) {
 
 	foundSlots.forEach(async slot => {
 		slotsPromises.push(new Promise(async (resolve, reject) => {
-			const slotInfo = {};
 			const cardIPA = await getInfo(4101, frameIP, slot, address);
-			slotInfo.ipa = cardIPA ? cardIPA : null;
 			const cardIPB = await getInfo(4201, frameIP, slot, address);
-			slotInfo.ipb = cardIPB ? cardIPB : null;
-
 			let requestIP = frameIP;
-			let requestSlot = slot;
-			let requestAddress = address;
-			if (cardIPB) {
+			if (cardIPB && cardIPB !== "StringVal") {
 				requestIP = cardIPB
-				requestSlot = '00';
-				requestAddress = '30';
 			}
-			if (cardIPA) {
+			if (cardIPA && cardIPA !== "StringVal") {
 				requestIP = cardIPA
-				requestSlot = '00';
-				requestAddress = '30';
 			}
 
-			const IOString = await getInfo(18000, requestIP, requestSlot, requestAddress);
-			const [[string, ins, outs]] = IOString.matchAll(/([0-9]{1,2}) In.*?([0-9]{1,2}) Out/g);
-			slotInfo.ins = ins;
-			slotInfo.outs = outs;
-			slotInfo.commands = {};
+			if (cardIPA == "StringVal" && cardIPB == "StringVal") return;
 
-			let commands = [];
-
-			commandsDB.card.forEach(group => {
-				group.commands.forEach(command => {
-					if (command.command != "shuffle") commands.push(command.command);
-				})
-			});
-			
-			const toCheck = commands.map(command => `${command}@0000:${requestAddress}:${requestSlot}?`).join(' ');
-
-			Logs.debug(`rolltrak -a ${requestIP} 0@0000:${requestAddress}:${requestSlot}? ${toCheck}`);
-			const {stdout} = await rolltrak.run(`rolltrak -a ${requestIP} 0@0000:${requestAddress}:${requestSlot}? ${toCheck}`, false);
-			stdout.shift();
-			rows = stdout.join("\r\n").split("\r\n");
-			rows.forEach(row => {
-				const values = row.split('\t').filter(n=>n);
-				slotInfo.commands[values[5]] = values[6];
-			})
+			const slotInfo = await checkCard(requestIP)
+			slotInfo.ipa = cardIPA ? cardIPA : null;
+			slotInfo.ipb = cardIPB ? cardIPB : null;
 			resolve(slotInfo);
 		}))
 
@@ -351,9 +352,10 @@ async function checkFrame(frameIP) {
 	const slotsInfo = await Promise.all(slotsPromises);
 	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Retrieved current cards and config'});
 	const returnData = {
-		"frameIP": frameIP,
+		"frame": frame,
 		"slots": {}
 	};
+	frame.slots = slotsInfo;
 	foundSlots.forEach((slot, index) => returnData.slots[slot] = {
 		"type": 'IQUCP25_SDI',
 		"commands": slotsInfo[index].commands,
@@ -361,6 +363,46 @@ async function checkFrame(frameIP) {
 		"outs": slotsInfo[index].outs
 	})
 	frontend.send('slotInfo', returnData);
+}
+
+async function checkCard(cardIP) {
+	const rolltrak = new Shell(Logs, 'CHECK', 'D');
+	const requestAddress = '30';
+	const requestSlot = '00';
+	const slotInfo = {};
+	const IOString = await getInfo(18000, cardIP, requestSlot, requestAddress);
+	const [[string, ins, outs]] = IOString.matchAll(/([0-9]{1,2}) In.*?([0-9]{1,2}) Out/g);
+	slotInfo.ins = Number(ins);
+	slotInfo.outs = Number(outs);
+	slotInfo.commands = {};
+
+	let commands = [];
+
+	commandsDB.card.forEach(group => {
+		group.commands.forEach(command => {
+			if (command.command != "shuffle") commands.push(command.command);
+		})
+	});
+
+	for (let index = 0; index < slotInfo.ins; index++) {		
+		commandsDB.spigot.forEach(group => {
+			group.commands.forEach(command => {
+				if (command.command != "shuffle") commands.push(command.command + (command.increment*index));
+			})
+		});
+	}
+
+	const toCheck = commands.map(command => `${command}@0000:${requestAddress}:${requestSlot}?`).join(' ');
+
+	Logs.info(`rolltrak -a ${cardIP} 0@0000:${requestAddress}:${requestSlot}? ${toCheck}`);
+	const {stdout} = await rolltrak.run(`rolltrak -a ${cardIP} 0@0000:${requestAddress}:${requestSlot}? ${toCheck}`, false);
+	stdout.shift();
+	rows = stdout.join("\r\n").split("\r\n");
+	rows.forEach(row => {
+		const values = row.split('\t').filter(n=>n);
+		slotInfo.commands[values[5]] = values[6];
+	})
+	return slotInfo;
 }
 
 async function doRollTrak() {
@@ -710,9 +752,11 @@ async function doRollTrak() {
 }
 
 async function getInfo(commandID, frameIP, slot, address = '10') {
+	jobs++
+	Logs.debug(`Jobs: ${jobs}`);
 	try {
 		const rolltrak = new Shell(Logs, 'DDS', 'D');
-		Logs.debug(`rolltrak -a ${frameIP} ${commandID}@0000:${address}:${slot}?`);
+		Logs.info(`rolltrak -a ${frameIP} ${commandID}@0000:${address}:${slot}?`);
 		const output = await rolltrak.run(`rolltrak -a ${frameIP} ${commandID}@0000:${address}:${slot}?`, false); // Get's I/O arrangement
 		const {stdout, stderr} = output;
 		let outArr;
@@ -721,17 +765,21 @@ async function getInfo(commandID, frameIP, slot, address = '10') {
 		} catch (error) {
 			Logs.object(outArr);
 			Logs.warn(`Issue getting info from slot ${slot} at IP: ${frameIP}`, error);
+			jobs--
 			return '';
 		}
 		const checkOut = outArr.length > 1 ? 1 : 0;
 		const returnString = outArr[checkOut];
 		if (returnString.includes('No rollcall connection')) {
 			Logs.warn(`Issue getting info from slot ${slot} at IP: ${frameIP}`);
+			jobs--
 			return '';
 		}
+		jobs--
 		return returnString.split('\t')[7];
 	} catch (error) {
 		Logs.warn(`Issue getting info from slot ${slot} at IP: ${frameIP}`, error);
+		jobs--
 		return '';
 	}
 }
@@ -752,4 +800,15 @@ function parseTrackData(rows) {
 		Logs.warn('Issue parsing data', error);
 		return [];
 	}
+}
+
+
+function startLoops() {
+	setInterval(()=>{
+		Logs.debug("Scanning all frames")
+		for (const frameIP in frames) {
+			if (!Object.prototype.hasOwnProperty.call(frames, frameIP)) return
+			checkFrame(frameIP)
+		}
+	}, pollRate*1000)
 }

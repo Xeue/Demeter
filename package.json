@@ -5,14 +5,14 @@
   "main": "main.js",
   "dependencies": {
     "auto-launch": "^5.0.6",
-    "ejs": "^3.1.9",
+    "ejs": "^3.1.10",
     "electron-ejs": "^1.2.1",
     "json5": "^2.2.3",
-    "mica-electron": "^1.5.0",
+    "mica-electron": "^1.5.16",
     "temp": "^0.9.4",
-    "xeue-config": "^2.1.0",
-    "xeue-logs": "^2.0.0",
-    "xeue-shell": "^1.2.0"
+    "xeue-config": "^2.2.8",
+    "xeue-logs": "^2.3.6",
+    "xeue-shell": "^1.4.2"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -47,7 +47,7 @@
   "author": "Sam Chilton",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^26.1.0",
-    "electron-builder": "^24.6.3"
+    "electron": "^35.2.0",
+    "electron-builder": "^26.0.12"
   }
 }
