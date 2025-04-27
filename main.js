@@ -51,25 +51,8 @@ const config = new Config(
 const commandsJSON = fs.readFileSync(path.join(__main, 'commandsDB.json'));
 const commandsDB = JSON5.parse(commandsJSON);
 
-const frames = {};
-/*
-	IP: {
-		number: number,
-		name: string,
-		ip: string,
-		doPush: boolean,
-		slots: [
-			0: {
-				type: string,
-				ins: number,
-				outs: number,
-				commands: {
-					key: value
-				}
-			}
-		]
-	}
-*/
+const frames = loadData('frames');
+const groups = loadData('groups');
 
 /* Start App */
 
@@ -172,23 +155,122 @@ async function setUpApp() {
 		}
 	});
 
+	/* Frames */
+
 	frontend.on('addFrame', (event, data) => {
 		if (frames[data.ip]) {
 			frames[data.ip].number = data.number;
 			frames[data.ip].name = data.name;
 			frames[data.ip].ip = data.ip;
+			frames[data.ip].group = data.group;
 		} else {
 			frames[data.ip] = {
 				"number":data.number,
 				"name": data.name,
 				"ip": data.ip,
-				"doPush": false,
+				"enabled": false,
+				"slots": {}
 			};
 		}
+		save();
 		frontend.send('frames', frames);
-		Logs.debug('Added/updated frame', frames);
-		// checkFrame(data.ip);
+		Logs.info('Added/updated frames', frames);
 	})
+
+	frontend.on('getFrames', (event,data) => {
+		frontend.send('frames', frames);
+	})
+
+	frontend.on('setCommand', (event, data) => {
+		try {
+			frames[data.ip].slots[data.slot].prefered[data.command] = {
+				'value': data.value,
+				'enabled': data.enabled
+			};
+		} catch (error) {			
+			if (!frames[data.ip].slots[data.slot].prefered) frames[data.ip].slots[data.slot].prefered = {};
+			frames[data.ip].slots[data.slot].prefered[data.command] = {
+				'value': data.value,
+				'enabled': data.enabled
+			};
+		}
+		save();
+	})
+
+	frontend.on('setEnable', (event, data) => {
+		try {
+			frames[data.ip].slots[data.slot].prefered[data.command].enabled = data.enabled
+		} catch (error) {			
+			if (!frames[data.ip].slots[data.slot].prefered) frames[data.ip].slots[data.slot].prefered = {};
+			frames[data.ip].slots[data.slot].prefered[data.command] = {
+				'value': null,
+				'enabled': data.enabled
+			};
+		}
+		save();
+	})
+
+	frontend.on('enableFrame', (event, data) => {
+		frames[data.ip].enabled = data.enabled;
+		save();
+	})
+
+	frontend.on('enableSlot', (event, data) => {
+		frames[data.ip].slots[data.slot].enabled = data.enabled;
+		save();
+	})
+
+	/* Groups */
+
+	frontend.on('addGroup', (event,data) => {
+		if (groups[data.name]) {
+			groups[data.name].name = data.name
+			groups[data.name].enabled = data.enabled
+		} else {
+			groups[data.name] = {
+				"enabled": false,
+				"name": data.name,
+				"commands": {}
+			}
+		}
+		save();
+		frontend.send('groups', groups);
+		Logs.info('Added/updated groups', groups);
+	})
+
+	frontend.on('getGroups', (event,data) => {
+		frontend.send('groups', groups);
+	})
+
+
+	frontend.on('setGroupCommand', (event, data) => {
+		try {
+			groups[data.group].commands[data.command] = {
+				'value': data.value,
+				'enabled': data.enabled,
+				"type": data.type,
+				"dataType": data.dataType,
+				"increment": data.increment
+			};
+		} catch (error) {			
+			if (!groups[data.group].commands) groups[data.group].commands = {};
+			groups[data.group].commands[data.command] = {
+				'value': data.value,
+				'enabled': data.enabled,
+				"type": data.type,
+				"dataType": data.dataType,
+				"increment": data.increment
+			};
+		}
+		save();
+	})
+
+	frontend.on('enableGroup', (event, data) => {
+		groups[data.name].enabled = data.enabled;
+		save();
+	})
+
+	// frontend.on('enable')
 
 	app.on('before-quit', function () {
 		isQuiting = true;
@@ -252,45 +334,6 @@ async function sleep(seconds) {
 	await new Promise (resolve => setTimeout(resolve, 1000*seconds));
 }
 
-
-//4052 NMOS mode 0 = OFF 2 = ON
-//4056 NMOS Registry 1=AUTO 2=Statis
-//4054 NMOS Int 0=auto 1=GB 2=Eth1 3=Eth2
-//4051 NMOS Take 1
-
-//4101 - IP
-//4103 - Gateway
-//4105 - Netmask
-//4108 - Mode 1 = static
-
-//4201 - IP
-//4203 - Gateway
-//4205 - Netmask
-//4208 - Mode 1 = static
-
-//4501 - Reference - 3-Chassis A, 4-Chassis B, 1-Network
-
-//8500 - Select audio spigot 0 indexed
-//8501 - Set mode 1=??? 0=Pass-through 2=mute 3=tone 4=custom
-
-//21000 PTP 0=Freerun, 1=Multicast, 2=Unicast, 3=NTP
-//21046 - Enable PTP on Eth 1
-//21047 - Enable PTP on Eth 2
-//21048 - Enable PTP on Control
-
-//21010 - PTP Domain
-//21013 - PTP Multicast Address
-
-//21074 - PTP Preference 0=Eth1, 1=Eth2, 2=None, 3=Best
-
-//48729 - 2110-31 interop
-//48730 - 2110-31 interop
-//48700 - Extender headers audio
-//48703 - Extender headers meta
-
-//58645 - Packet timing 1=125 increments by 14
-//58644 - channel count increments by 14
-
 async function checkFrame(frameIP) {
 	const rolltrak = new Shell(Logs, 'CHECK', 'D');
 	rolltrak.on('stdout', stdout=>{
@@ -313,7 +356,9 @@ async function checkFrame(frameIP) {
 
 	Logs.info(command);
 	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Discovering cards within frame'});
+	jobs++
 	const {stdout} = await rolltrak.run(command, false);
+	jobs--
 	const slotsData = parseTrackData(stdout);
 
 	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Checking cards current config'});
@@ -343,26 +388,83 @@ async function checkFrame(frameIP) {
 			if (cardIPA == "StringVal" && cardIPB == "StringVal") return;
 
 			const slotInfo = await checkCard(requestIP)
-			slotInfo.ipa = cardIPA ? cardIPA : null;
-			slotInfo.ipb = cardIPB ? cardIPB : null;
-			resolve(slotInfo);
+
+			frame.slots[slot].ipa = cardIPA ? cardIPA : null;
+			frame.slots[slot].ipb = cardIPB ? cardIPB : null;
+			frame.slots[slot].ins = slotInfo.ins;
+			frame.slots[slot].outs = slotInfo.outs;
+			frame.slots[slot].active = slotInfo.active;
+			frame.slots[slot].group = computeGroupCommands(frame.group, frame.number, slot);
+			if (frame.enabled && frame.slots[slot].enabled) {
+				const toSend = []
+				for (const command in frame.slots[slot].prefered) {
+					if (!Object.prototype.hasOwnProperty.call(frame.slots[slot].prefered, command)) continue;
+					const cmd = frame.slots[slot].prefered[command];
+					if (!cmd.enabled) continue;
+					if (cmd.value == frame.slots[slot].active[command]) continue;
+					const cardSlot = '00';
+					const cardAddress = '30';
+					if (cmd.value == null) continue;
+					toSend.push({
+						'command': `${command}@0000:${cardAddress}:${cardSlot}`,
+						'value': cmd.value
+					})
+					// if (cmd.)
+				}
+
+				if (toSend.length > 0) {
+					Logs.log('Changes required, pushing')
+					try {						
+						const toRun = toSend.map(command => `${command.command}=${command.value}`).join(' ');
+						Logs.debug(`Running: rolltrak -a ${requestIP} ${toRun}`);
+						jobs++
+						rolltrak.run(`rolltrak -a ${requestIP} ${toRun}`, false).then(()=>{jobs--});
+					} catch (error) {
+						Logs.error('Error sending changes', error)
+					}
+				}
+			}
+			resolve();
 		}))
 
 	})
-	const slotsInfo = await Promise.all(slotsPromises);
+	await Promise.all(slotsPromises);
+
 	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Retrieved current cards and config'});
-	const returnData = {
+	frontend.send('slotInfo', {
 		"frame": frame,
-		"slots": {}
-	};
-	frame.slots = slotsInfo;
-	foundSlots.forEach((slot, index) => returnData.slots[slot] = {
-		"type": 'IQUCP25_SDI',
-		"commands": slotsInfo[index].commands,
-		"ins": slotsInfo[index].ins,
-		"outs": slotsInfo[index].outs
-	})
-	frontend.send('slotInfo', returnData);
+		"slots": frame.slots
+	});
+}
+
+function computeGroupCommands(group, frameNumber, slotNumber) {
+	const commands = {}
+	for (const command in groups[group].commands) {
+		if (!Object.prototype.hasOwnProperty.call(groups[group].commands, command)) return;
+		const commandDef = groups[group].commands[command];
+		if (!commandDef.enabled) return;
+		commandDef.value = commandDef.value.replaceAll('FRAME', frameNumber).replaceAll('SLOT', slotNumber).replaceAll('CARD', Math.floor(slotNumber/2));
+		if (commandDef.type == "card") {
+			commands[command] = parseCommand(commandDef.value, commandDef.dataType)
+		} else {
+			for (let spigot = 0; spigot < 16; spigot++) {
+				commands[command+(commandDef.increment*spigot)] = parseCommand(commandDef.value.replaceAll('SPIGOT', spigot), commandDef.dataType)
+			}
+		}
+	}
+	return commands
+}
+
+function parseCommand(command, type) {
+	switch (type) {
+		case 'smartip':
+			const octets = command.split('.');
+			return octets.map(octet=>exec(octet)).join();
+		case 'text':
+		case 'boolean':
+		case 'select':
+			return exec(command)
+	}
 }
 
 async function checkCard(cardIP) {
@@ -374,6 +476,7 @@ async function checkCard(cardIP) {
 	const [[string, ins, outs]] = IOString.matchAll(/([0-9]{1,2}) In.*?([0-9]{1,2}) Out/g);
 	slotInfo.ins = Number(ins);
 	slotInfo.outs = Number(outs);
+	slotInfo.active = {};
 	slotInfo.commands = {};
 
 	let commands = [];
@@ -395,15 +498,156 @@ async function checkCard(cardIP) {
 	const toCheck = commands.map(command => `${command}@0000:${requestAddress}:${requestSlot}?`).join(' ');
 
 	Logs.info(`rolltrak -a ${cardIP} 0@0000:${requestAddress}:${requestSlot}? ${toCheck}`);
+	jobs++
 	const {stdout} = await rolltrak.run(`rolltrak -a ${cardIP} 0@0000:${requestAddress}:${requestSlot}? ${toCheck}`, false);
+	jobs--
 	stdout.shift();
 	rows = stdout.join("\r\n").split("\r\n");
 	rows.forEach(row => {
 		const values = row.split('\t').filter(n=>n);
-		slotInfo.commands[values[5]] = values[6];
+		slotInfo.active[values[5]] = values[6];
 	})
 	return slotInfo;
 }
+
+async function getInfo(commandID, frameIP, slot, address = '10') {
+	jobs++
+	Logs.debug(`Jobs: ${jobs}`);
+	try {
+		const rolltrak = new Shell(Logs, 'DDS', 'D');
+		Logs.info(`rolltrak -a ${frameIP} ${commandID}@0000:${address}:${slot}?`);
+		const output = await rolltrak.run(`rolltrak -a ${frameIP} ${commandID}@0000:${address}:${slot}?`, false); // Get's I/O arrangement
+		const {stdout, stderr} = output;
+		let outArr;
+		try {
+			outArr = stdout[0].split('\r\n');
+		} catch (error) {
+			Logs.object(outArr);
+			Logs.warn(`Issue getting info from slot ${slot} at IP: ${frameIP}`, error);
+			jobs--
+			return '';
+		}
+		const checkOut = outArr.length > 1 ? 1 : 0;
+		const returnString = outArr[checkOut];
+		if (returnString.includes('No rollcall connection')) {
+			Logs.warn(`Issue getting info from slot ${slot} at IP: ${frameIP}`);
+			jobs--
+			return '';
+		}
+		jobs--
+		return returnString.split('\t')[7];
+	} catch (error) {
+		Logs.warn(`Issue getting info from slot ${slot} at IP: ${frameIP}`, error);
+		jobs--
+		return '';
+	}
+}
+
+function parseTrackData(rows) {
+	try {
+		if (rows[0].includes('No rollcall connection')) {
+			Logs.warn('Rollcall connection timeout');
+			return [];
+		}
+		if (rows.length < 2) {
+			Logs.warn('Not enough rows returned');
+			return [];
+		}
+		rows.shift();
+		return rows.map(row => row.split('\t')[7])
+	} catch (error) {
+		Logs.warn('Issue parsing data', error);
+		return [];
+	}
+}
+
+
+function startLoops() {
+	setInterval(()=>{
+		Logs.debug("Scanning all frames")
+		for (const frameIP in frames) {
+			if (!Object.prototype.hasOwnProperty.call(frames, frameIP)) return
+			checkFrame(frameIP)
+		}
+	}, pollRate*1000)
+}
+
+
+function save() {
+	writeData('frames', frames)
+	writeData('groups', groups)
+}
+
+function loadData(file) {
+	try {
+		const dataRaw = fs.readFileSync(`${__data}/data/${file}.json`);
+		try {
+			return JSON.parse(dataRaw);
+		} catch (error) {
+			Logs.error(`There is an error with the syntax of the JSON in ${file}.json file`, error);
+			return [];
+		}
+	} catch (error) {
+		Logs.warn(`Could not read the file ${file}.json, attempting to create new file`);
+		Logs.debug('File error:', error);
+		const fileData = {};
+		if (!fs.existsSync(`${__data}/data/`)){
+			fs.mkdirSync(`${__data}/data/`);
+		}
+		fs.writeFileSync(`${__data}/data/${file}.json`, JSON.stringify(fileData, null, 4));
+		return fileData;
+	}
+}
+
+function writeData(file, data) {
+	try {
+		fs.writeFileSync(`${__data}/data/${file}.json`, JSON.stringify(data, undefined, 2));
+	} catch (error) {
+		Logs.error(`Could not write the file ${file}.json, do we have permission to access the file?`, error);
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 async function doRollTrak() {
 	return;
@@ -749,66 +993,4 @@ async function doRollTrak() {
 		}
 		Logs.log(`Done all pushes for ${cardIP}`);
 	}
-}
-
-async function getInfo(commandID, frameIP, slot, address = '10') {
-	jobs++
-	Logs.debug(`Jobs: ${jobs}`);
-	try {
-		const rolltrak = new Shell(Logs, 'DDS', 'D');
-		Logs.info(`rolltrak -a ${frameIP} ${commandID}@0000:${address}:${slot}?`);
-		const output = await rolltrak.run(`rolltrak -a ${frameIP} ${commandID}@0000:${address}:${slot}?`, false); // Get's I/O arrangement
-		const {stdout, stderr} = output;
-		let outArr;
-		try {
-			outArr = stdout[0].split('\r\n');
-		} catch (error) {
-			Logs.object(outArr);
-			Logs.warn(`Issue getting info from slot ${slot} at IP: ${frameIP}`, error);
-			jobs--
-			return '';
-		}
-		const checkOut = outArr.length > 1 ? 1 : 0;
-		const returnString = outArr[checkOut];
-		if (returnString.includes('No rollcall connection')) {
-			Logs.warn(`Issue getting info from slot ${slot} at IP: ${frameIP}`);
-			jobs--
-			return '';
-		}
-		jobs--
-		return returnString.split('\t')[7];
-	} catch (error) {
-		Logs.warn(`Issue getting info from slot ${slot} at IP: ${frameIP}`, error);
-		jobs--
-		return '';
-	}
-}
-
-function parseTrackData(rows) {
-	try {
-		if (rows[0].includes('No rollcall connection')) {
-			Logs.warn('Rollcall connection timeout');
-			return [];
-		}
-		if (rows.length < 2) {
-			Logs.warn('Not enough rows returned');
-			return [];
-		}
-		rows.shift();
-		return rows.map(row => row.split('\t')[7])
-	} catch (error) {
-		Logs.warn('Issue parsing data', error);
-		return [];
-	}
-}
-
-
-function startLoops() {
-	setInterval(()=>{
-		Logs.debug("Scanning all frames")
-		for (const frameIP in frames) {
-			if (!Object.prototype.hasOwnProperty.call(frames, frameIP)) return
-			checkFrame(frameIP)
-		}
-	}, pollRate*1000)
 }

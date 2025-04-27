@@ -295,14 +295,14 @@ body.micaActive {
 
 
 
-.groupCommands {
+.collapseSection {
    display: none;
    flex-wrap: wrap;
    padding: 0.1rem;
    padding-left: 1rem;
 }
 
-header:has(.groupEnable:checked) + .groupCommands {
+header:has(.collapseHeader:checked) + .collapseSection {
    display: block;
 }
 
@@ -325,17 +325,14 @@ header:has(.groupEnable:checked) + .groupCommands {
 .commandCont {
    margin: 5px;
    display: grid;
-   grid-template-columns: 2.2rem 1fr 3fr;
+   grid-template-columns: 2.2rem 1fr 1fr 1fr 2fr;
    text-align: left;
    align-items: center;
 }
 
-.commandEnabled:not(:checked) ~* {
+.form-switch:has(.commandEnabled:not(:checked)) ~* {
    color: dimgrey;
    opacity: 0.5;
-   cursor: not-allowed;
-   pointer-events: none;
-}
-
-.octet {
+   /* cursor: not-allowed;
+   pointer-events: none; */
 }
