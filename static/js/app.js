@@ -157,10 +157,17 @@ function drawSlotInfo(slotInfo) {
 			
 			group.commands.forEach(command => {
 				let _command = _collapseSection.querySelector(`[data-command="${command.command}"]`)
-				if (!_command) {
-					_collapseSection.append(drawCommand('frame', command, slot.prefered[command.command], slot.active[command.command], slot.group[command.command]));
-				} else {
-					updateCommand(_command, command, slot.prefered[command.command], slot.active[command.command], computed)
+				try {					
+					const prefered = slot.prefered[command.command];
+					const active = slot.active[command.command];
+					const group = slot.group[command.command] ? slot.group[command.command].value : null;
+					if (!_command) {
+						_collapseSection.append(drawCommand('frame', command, command.command, prefered, active, group));
+					} else {
+						updateCommand(_command, command, prefered, active, group)
+					}
+				} catch (error) {
+					console.log(error)
 				}
 			})
 			checkDeps(_collapseSection);
@@ -214,11 +221,19 @@ function drawSlotInfo(slotInfo) {
 
 
 				group.commands.forEach(command => {
-					let _command = _collapseSection.querySelector(`[data-command="${command.command}"]`)
-					if (!_command) {
-						_collapseSection.append(drawCommand('frame', command, slot.prefered[command.command], slot.active[command.command], slot.group[command.command]));
-					} else {
-						updateCommand(_command, command, slot.prefered[command.command], slot.active[command.command], computed)
+					const commandID = Number(command.command) + Number(command.increment * spigot)
+					const _command = _collapseSection.querySelector(`[data-command="${commandID}"]`)
+					try {						
+						const prefered = slot.prefered[commandID];
+						const active = slot.active[commandID];
+						const group = slot.group[commandID] ? slot.group[commandID].value : null;
+						if (!_command) {
+							_collapseSection.append(drawCommand('frame', command, commandID, prefered, active, group));
+						} else {
+							updateCommand(_command, command, prefered, active, group);
+						}
+					} catch (error) {
+						console.log(error)
 					}
 				})
 
@@ -242,14 +257,15 @@ function doFrameStatus(data) {
 
 /* Frame commands */
 
-function drawCommand(prefix, command, editValue = null, readValue = null, computed = null) {
+function drawCommand(prefix, command, commandID, editValue = null, readValue = null, computed = null) {
 	const opts = command.options ? JSON.stringify(command.options).replace(/\"/g, "'") : '';
 	const deps = command.depends ? JSON.stringify(command.depends).replace(/\"/g, "'") : '';
 	const _cont = document.createElement('div');
 	_cont.classList.add('commandCont');
-	_cont.setAttribute('data-command', command.command);
+	_cont.setAttribute('data-command', commandID)
 	_cont.setAttribute('data-name', command.name);
 	_cont.setAttribute('data-type', command.type);
+	_cont.setAttribute('data-take', command.take);
 	_cont.setAttribute('data-increment', command.increment || '');
 	_cont.setAttribute('data-options', opts);
 	_cont.setAttribute('data-depends', deps);
@@ -341,7 +357,7 @@ function drawCommand(prefix, command, editValue = null, readValue = null, comput
 			case 'smartip':
 				_input = document.createElement('div');
 				let valArr = [];
-				if (editValue !== null) valArr = editValue.value.split('.');
+				if (editValue !== null && editValue.value !== null) valArr = editValue.value.split('.');
 				for (let index = 0; index < 4; index++) {
 					let _octet = document.createElement('input');
 					_octet.setAttribute('type', 'text');
@@ -379,7 +395,7 @@ function drawCommand(prefix, command, editValue = null, readValue = null, comput
 	}
 }
 
-function updateCommand(_command, command, prefered = null, active) {
+function updateCommand(_command, command, prefered = null, active, computed = null) {
 	try {
 		// if (command.command == 4052) console.log(command, prefered, active)
 		const _read = _command.querySelector('.commandRead');
@@ -414,6 +430,25 @@ function updateCommand(_command, command, prefered = null, active) {
 				_read.classList.add('bg-danger');
 			}
 		}
+
+		const _computed = _command.querySelector('.commandComputed');
+		if (computed) {
+			_computed.classList.add('form-control','form-control-sm','w-75');
+			switch (command.type) {
+				case 'boolean':
+					_computed.innerHTML = computed == 0 ? 'False' : 'True';
+					break;
+				case 'select':
+					_computed.innerHTML = command.options[computed];
+					break;
+				default:
+					_computed.innerHTML = computed;
+					break;
+			}
+		} else {
+			_computed.innerHTML = '';
+			_computed.classList.remove('form-control','form-control-sm','w-75');
+		}
 	} catch (error) {
 		console.log(error)
 	}
@@ -447,7 +482,7 @@ function drawGroup(group) {
 	_groupCont.classList.add('groupCont', 'groupCommandCont');
 	_groupCont.setAttribute('data-name', group.name);
 	const _header = `<header>
-		<input type="checkbox" class="form-check form-check-input collapseHeader" id="group_${groupIdName}" checked>
+		<input type="checkbox" class="form-check form-check-input collapseHeader" id="group_${groupIdName}">
 		<label class="groupName" for="group_${groupIdName}">${group.name}</label>
 		<div class="form-switch"><input type="checkbox" class="form-check-input groupEnable" ${group.enabled ? 'checked' : ''}></div>
 	</header>`
@@ -458,19 +493,19 @@ function drawGroup(group) {
 	_groupCont.append(_groupCommandsSection);
 
 	_groupCommandsSection.insertAdjacentHTML('beforeend', `<h4 class="m-1">Card Settings</h4>`);
-	commands.card.forEach((group, index) => {
+	commands.card.forEach((cmdGroup, index) => {
 		const _groupCont = document.createElement('section');
-		_groupCont.setAttribute('data-name', group.name);
+		_groupCont.setAttribute('data-name', cmdGroup.name);
 		_groupCont.setAttribute('data-type', 'card');
 		_groupCont.classList.add('groupCont');
 		_groupCont.insertAdjacentHTML('beforeend', `<header>
 				<input type="checkbox" class="form-check form-check-input collapseHeader" id="group_${groupIdName}_${index}">
-				<label class="groupName" for="group_${groupIdName}_${index}">${group.name}</div>
+				<label class="groupName" for="group_${groupIdName}_${index}">${cmdGroup.name}</div>
 			</header>`);
 		const _groupCommands = document.createElement('section');
 		_groupCommands.classList.add('collapseSection');
-		group.commands.forEach(command => {
-			_groupCommands.append(drawCommand('group', command));
+		cmdGroup.commands.forEach(command => {
+			_groupCommands.append(drawCommand('group', command, command.command, window.groups[group.name].commands[command.command]));
 		})
 		_groupCont.append(_groupCommands);
 		_groupCommandsSection.append(_groupCont);
@@ -478,19 +513,19 @@ function drawGroup(group) {
 	})
 
 	_groupCommandsSection.insertAdjacentHTML('beforeend', `<h4 class="m-1">Spigot Settings</h4>`);
-	commands.spigot.forEach((group, index) => {
+	commands.spigot.forEach((cmdGroup, index) => {
 		const _groupCont = document.createElement('section');
-		_groupCont.setAttribute('data-name', group.name);
+		_groupCont.setAttribute('data-name', cmdGroup.name);
 		_groupCont.setAttribute('data-type', 'spigot');
 		_groupCont.classList.add('groupCont');
 		_groupCont.insertAdjacentHTML('beforeend', `<header>
 				<input type="checkbox" class="form-check form-check-input collapseHeader" id="group_spig_${groupIdName}_${index}">
-				<label class="groupName" for="group_spig_${groupIdName}_${index}">${group.name}</div>
+				<label class="groupName" for="group_spig_${groupIdName}_${index}">${cmdGroup.name}</div>
 			</header>`);
 		const _groupCommands = document.createElement('section');
 		_groupCommands.classList.add('collapseSection');
-		group.commands.forEach(command => {
-			_groupCommands.append(drawCommand('group', command));
+		cmdGroup.commands.forEach(command => {
+			_groupCommands.append(drawCommand('group', command, command.command, window.groups[group.name].commands[command.command]));
 		})
 		_groupCont.append(_groupCommands);
 		_groupCommandsSection.append(_groupCont);
@@ -615,6 +650,7 @@ function on(eventNames, selectors, callback) {
 function doInput(_element) {
 	if (_element.classList.contains('commandCheck')) return
 	const command = _element.closest('.commandCont').getAttribute('data-command');
+	const take = _element.closest('.commandCont').getAttribute('data-take');
 	const slot = _element.closest('.slotCont').getAttribute('data-slot');
 	const frame = _element.closest('.frameCont').getAttribute('data-ip');
 	const enabled = _element.closest('.commandCont').querySelector('.commandEnabled').checked;
@@ -624,13 +660,14 @@ function doInput(_element) {
 		"slot": slot,
 		"command": command,
 		"value": _element.value,
-		"enabled": enabled
+		"enabled": enabled,
+		"take": take
 	});
 }
 
 function doCheck(_element) {
-	console.log('input')
 	const command = _element.closest('.commandCont').getAttribute('data-command');
+	const take = _element.closest('.commandCont').getAttribute('data-take');
 	const slot = _element.closest('.slotCont').getAttribute('data-slot');
 	const frame = _element.closest('.frameCont').getAttribute('data-ip');
 	const enabled = _element.closest('.commandCont').querySelector('.commandEnabled').checked;
@@ -640,12 +677,14 @@ function doCheck(_element) {
 		"slot": slot,
 		"command": command,
 		"value": _element.checked ? '1' : '0',
-		"enabled": enabled
+		"enabled": enabled,
+		"take": take
 	});
 }
 
 function doOctet(_element) {
 	const command = _element.closest('.commandCont').getAttribute('data-command');
+	const take = _element.closest('.commandCont').getAttribute('data-take');
 	const slot = _element.closest('.slotCont').getAttribute('data-slot');
 	const frame = _element.closest('.frameCont').getAttribute('data-ip');
 	const __octets = _element.parentElement.querySelectorAll('.octet');
@@ -660,7 +699,8 @@ function doOctet(_element) {
 		"slot": slot,
 		"command": command,
 		"value": ip.join('.'),
-		"enabled": enabled
+		"enabled": enabled,
+		"take": take
 	});
 }
 
@@ -704,6 +744,7 @@ function doGroupInput(_element) {
 	const command = _element.closest('.commandCont').getAttribute('data-command');
 	const group = _element.closest('.groupCommandCont').getAttribute('data-name');
 	const type = _element.closest('.groupCont').getAttribute('data-type');
+	const take = _element.closest('.commandCont').getAttribute('data-take');
 	const dataType = _element.closest('.commandCont').getAttribute('data-type');
 	const increment = _element.closest('.commandCont').getAttribute('data-increment');
 	const enabled = _element.closest('.commandCont').querySelector('.commandEnabled').checked;
@@ -715,7 +756,8 @@ function doGroupInput(_element) {
 		"increment": increment,
 		"command": command,
 		"value": _element.value,
-		"enabled": enabled
+		"enabled": enabled,
+		"take": take
 	});
 }
 
@@ -723,6 +765,7 @@ function doGroupCheck(_element) {
 	const command = _element.closest('.commandCont').getAttribute('data-command');
 	const group = _element.closest('.groupCommandCont').getAttribute('data-name');
 	const type = _element.closest('.groupCont').getAttribute('data-type');
+	const take = _element.closest('.commandCont').getAttribute('data-take');
 	const dataType = _element.closest('.commandCont').getAttribute('data-type');
 	const increment = _element.closest('.commandCont').getAttribute('data-increment');
 	const enabled = _element.closest('.commandCont').querySelector('.commandEnabled').checked;
@@ -734,7 +777,8 @@ function doGroupCheck(_element) {
 		"increment": increment,
 		"command": command,
 		"value": _element.checked ? '1' : '0',
-		"enabled": enabled
+		"enabled": enabled,
+		"take": take
 	});
 }
 
@@ -742,6 +786,7 @@ function doGroupOctet(_element) {
 	const command = _element.closest('.commandCont').getAttribute('data-command');
 	const group = _element.closest('.groupCommandCont').getAttribute('data-name');
 	const type = _element.closest('.groupCont').getAttribute('data-type');
+	const take = _element.closest('.commandCont').getAttribute('data-take');
 	const dataType = _element.closest('.commandCont').getAttribute('data-type');
 	const increment = _element.closest('.commandCont').getAttribute('data-increment');
 	const __octets = _element.parentElement.querySelectorAll('.octet');
@@ -758,7 +803,8 @@ function doGroupOctet(_element) {
 		"increment": increment,
 		"command": command,
 		"value": ip.join('.'),
-		"enabled": enabled
+		"enabled": enabled,
+		"take": take
 	});
 }
 
