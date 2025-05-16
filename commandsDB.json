@@ -1,7 +1,7 @@
 {
     "card": [
         {
-            "name": "Ethernet 1 Settings",
+            "name": "Ethernet 1 Settings (Key words: FRAME, CARD, SLOT, SPIGOT)",
             "commands": [{
                     "command": 4108,
                     "name": "Mode",
@@ -32,7 +32,7 @@
                     "take": 4114
                 }]
         },{
-            "name": "Ethernet 2 Settings",
+            "name": "Ethernet 2 Settings (Key words: FRAME, CARD, SLOT, SPIGOT)",
             "commands": [{
                     "command": 4208,
                     "name": "Mode",
