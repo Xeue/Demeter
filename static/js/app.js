@@ -16,6 +16,22 @@ document.addEventListener('DOMContentLoaded', () => {
 	on('click', '#addFrameIPBtn', addFrame);
 	on('click', '#addGroupBtn', addGroup);
 
+	on('click', '#exportGroups', ()=>{download('groups.json', JSON.stringify(window.groups, null,4))})
+	on('click', '#exportFrames', ()=>{download('frames.json', JSON.stringify(window.frames, null,4))})
+	on('click', '#importGroups', async ()=>{
+		const _input = document.getElementById('importGroupsFile');
+		console.log(_input)
+		console.log(_input.files)
+		console.log(_input.files.item(0))
+		const groups = await _input.files.item(0).text()
+		backend.send('setGroups', JSON.parse(groups));
+	})
+	on('click', '#importFrames', async ()=>{
+		const _input = document.getElementById('importFramesFile');
+		const frames = await _input.files.item(0).text()
+		backend.send('setFrames', JSON.parse(frames));
+	})
+
 	/* Frame controls */
 
 	on('change', '.frame_octet', (_element)=>doOctet(_element));
@@ -458,8 +474,7 @@ function updateCommand(_command, command, prefered = null, active, computed = nu
 
 function addGroup() {
 	const groupName = document.getElementById('addGroup').value
-	const groupNameEnabled = document.getElementById('addGroupEnabled').value
-	backend.send('addGroup', {"name": groupName, "enabled": groupNameEnabled});
+	backend.send('addGroup', {"name": groupName, "enabled": true});
 }
 
 function drawGroups(groups) {
@@ -835,4 +850,16 @@ function doGroupEnable(_element) {
 		"name":group,
 		"enabled": _element.checked
 	});
+}
+
+
+
+function download(filename, text) {
+	var element = document.createElement('a');
+	element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+	element.setAttribute('download', filename);
+	element.style.display = 'none';
+	document.body.appendChild(element);
+	element.click();
+	document.body.removeChild(element);
 }

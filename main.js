@@ -54,8 +54,8 @@ const config = new Config(
 const commandsJSON = fs.readFileSync(path.join(__main, 'commandsDB.json'));
 const commandsDB = JSON5.parse(commandsJSON);
 
-const frames = loadData('frames');
-const groups = loadData('groups');
+let frames = loadData('frames');
+let groups = loadData('groups');
 
 /* Start App */
 
@@ -275,6 +275,22 @@ async function setUpApp() {
 	frontend.on('enableGroup', (event, data) => {
 		groups[data.name].enabled = data.enabled;
 		save();
+	})
+
+	frontend.on('setGroups', (event ,data) => {
+		groups = data;
+		frontend.send('groups', groups);
+		Logs.debug('Saving');
+		writeData('frames', frames);
+		writeData('groups', groups);
+	})
+
+	frontend.on('setFrames', (event ,data) => {
+		frames = data;
+		frontend.send('frames', frames);
+		Logs.debug('Saving');
+		writeData('frames', frames);
+		writeData('groups', groups);
 	})
 
 	// frontend.on('enable')
