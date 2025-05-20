@@ -1,6 +1,6 @@
 {
   "name": "demeter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "UCP Blaster 3000",
   "main": "main.js",
   "dependencies": {
