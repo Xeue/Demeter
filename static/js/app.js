@@ -40,6 +40,8 @@ document.addEventListener('DOMContentLoaded', () => {
 	on('click', '.frame_commandEnabled', (_element)=>doEnable(_element));
 	on('click', '.slotEnable', (_element)=>doSlotEnable(_element));
 	on('click', '.frameEnable', (_element)=>doFrameEnable(_element));
+	on('click', '.frameDelete', (_element) => doFrameDelete(_element));
+	on('click', '.groupDelete', (_element) => doGroupDelete(_element));
 
 	/* Group controls */
 
@@ -105,6 +107,7 @@ function drawFrame(frame) {
 		<label class="frameName" for="frame_${frame.ip.replaceAll('.','_')}">${frame.ip} - ${frame.number} - ${frame.name} - ${frame.group}</label>
 		<div class="form-switch"><input type="checkbox" class="form-check-input frameEnable" ${frame.enabled ? 'checked' : ''}></div>
 		<div class="frameStatus ms-auto"></div>
+		<button class="frameDelete btn btn-danger btn-sm ms-2">Delete</button>
 	</header>`
 	_frameCont.insertAdjacentHTML('beforeend', _header);
 	_frameCont.insertAdjacentHTML('beforeend', `<section class="data collapseSection"></div>`);
@@ -500,6 +503,7 @@ function drawGroup(group) {
 		<input type="checkbox" class="form-check form-check-input collapseHeader" id="group_${groupIdName}">
 		<label class="groupName" for="group_${groupIdName}">${group.name}</label>
 		<div class="form-switch"><input type="checkbox" class="form-check-input groupEnable" ${group.enabled ? 'checked' : ''}></div>
+		<button class="groupDelete btn btn-danger btn-sm ms-auto">Delete</button>
 	</header>`
 	_groupCont.insertAdjacentHTML('beforeend', _header);
 
@@ -752,6 +756,15 @@ function doFrameEnable(_element) {
 	});
 }
 
+function doFrameDelete(_element) {
+	const _frame = _element.closest('.frameCont');
+	const frame = _frame.getAttribute('data-ip');
+	_frame.remove();
+	backend.send('deleteFrame', {
+		"ip":frame
+	});
+}
+
 /* Handle group inputs */
 
 function doGroupInput(_element) {
@@ -849,6 +862,15 @@ function doGroupEnable(_element) {
 	backend.send('enableGroup', {
 		"name":group,
 		"enabled": _element.checked
+	});
+}
+
+function doGroupDelete(_element) {
+	const _group = _element.closest('.groupCommandCont');
+	const group = _group.getAttribute('data-name');
+	_group.remove();
+	backend.send('deleteGroup', {
+		"name":group
 	});
 }
 

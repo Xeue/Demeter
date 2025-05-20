@@ -33,7 +33,7 @@ let isQuiting = false;
 let mainWindow = null;
 let jobs = 0;
 let requestSave = false;
-const pollRate = 5;
+const pollRate = 10;
 const saveRate = 5;
 const devEnv = app.isPackaged ? './' : './';
 const __main = path.resolve(__dirname, devEnv);
@@ -170,6 +170,7 @@ async function setUpApp() {
 				"name": data.name,
 				"ip": data.ip,
 				"enabled": false,
+				"group": data.group,
 				"slots": {}
 			};
 		}
@@ -217,6 +218,11 @@ async function setUpApp() {
 
 	frontend.on('enableFrame', (event, data) => {
 		frames[data.ip].enabled = data.enabled;
+		save();
+	})
+
+	frontend.on('deleteFrame', (event, data) => {
+		delete frames[data.ip];
 		save();
 	})
 
@@ -285,6 +291,11 @@ async function setUpApp() {
 		writeData('groups', groups);
 	})
 
+	frontend.on('deleteGroup', (event, data) => {
+		delete groups[data.name];
+		save();
+	})
+
 	frontend.on('setFrames', (event ,data) => {
 		frames = data;
 		frontend.send('frames', frames);
@@ -303,9 +314,9 @@ async function setUpApp() {
 		if (BrowserWindow.getAllWindows().length === 0) createWindow();
 	});
 
-	Logs.on('logSend', message => {
-		if (!isQuiting) frontend.send('log', message);
-	});
+	// Logs.on('logSend', message => {
+	// 	if (!isQuiting) frontend.send('log', message);
+	// });
 }
 
 async function createWindow() {
@@ -360,7 +371,7 @@ async function sleep(seconds) {
 async function checkFrame(frameIP) {
 	const rolltrak = new Shell(Logs, 'CHECK', 'D');
 	rolltrak.on('stdout', stdout=>{
-		Logs.info(stdout);
+		// Logs.info(stdout);
 	})
 
 	const frame = frames[frameIP]
@@ -385,17 +396,19 @@ async function checkFrame(frameIP) {
 	const slotsData = parseTrackData(stdout);
 
 	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Checking cards current config'});
-	slotsData.forEach((slot, index) => {
+	slotsData.forEach((slotInfo, index) => {
+		const slot = String((1+index).toString(10)).padStart(2, '0')
 		try {
-			if (!slot.includes('IQUCP25_SDI')) return;
-			foundSlots.push(String((1+index).toString(16)).padStart(2, '0'));
+			if (!slotInfo.includes('IQUCP25_SDI')) return Logs.info(`Frame: ${frameIP} Slot: ${slot} is not a UCP`);
+			foundSlots.push(slot);
 		} catch (error) {
-			Logs.warn(`Issue with slot: ${String((1+index).toString(16)).padStart(2, '0')} at IP: ${frameIP}`, error);
+			Logs.warn(`Issue with slot: ${slot} at IP: ${frameIP}`, error);
 		}
 	});
 
 	const slotsPromises = [];
 
+	Logs.info(`Frame: ${frameIP} found slots`, foundSlots);
 	foundSlots.forEach(async slot => {
 		slotsPromises.push(new Promise(async (resolve, reject) => {
 			let checkNull = false;
@@ -413,7 +426,10 @@ async function checkFrame(frameIP) {
 				requestIP = cardIPA;
 			}
 
-			if (cardIPA == "StringVal" && cardIPB == "StringVal") return;
+			if (cardIPA == "StringVal" && cardIPB == "StringVal") {
+				Logs.warn(`IPs for slot: ${slot} not found`);
+				return resolve();
+			}
 
 			const [slotInfo, err] = await checkCard(requestIP)
 			if (err) {
@@ -428,6 +444,13 @@ async function checkFrame(frameIP) {
 			frame.slots[slot].active = slotInfo.active;
 			frame.slots[slot].group = computeGroupCommands(frame.group, frame.number, slot);
 			if (!frame.slots[slot].prefered) frame.slots[slot].prefered = {}
+
+			Logs.info('Sending slot into to front end');
+			frontend.send('slotInfo', {
+				"frame": frame,
+				"slots": frame.slots
+			});
+
 			if (!frame.enabled || !frame.slots[slot].enabled) return resolve();
 
 			const cardCommands = {};
@@ -485,23 +508,18 @@ async function checkFrame(frameIP) {
 				}
 			}
 
-			// Logs.debug('HERE', frameCommands);
+			Logs.debug('Sending commands', frameCommands);
 
 			doCommands(rolltrak, frameCommands, frameTakes, frameIP, "10", slot).then(()=>{
 				doCommands(rolltrak, cardCommands, cardTakes, requestIP, cardAddress, cardSlot);
 			});
+			save();
 			resolve();
 		}))
-
 	})
 	await Promise.all(slotsPromises);
 	save();
-
 	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Retrieved current cards and config'});
-	frontend.send('slotInfo', {
-		"frame": frame,
-		"slots": frame.slots
-	});
 }
 
 async function doCommands(rolltrak, cardCommands, takes, requestIP, cardAddress, cardSlot) {
@@ -530,7 +548,7 @@ async function doCommands(rolltrak, cardCommands, takes, requestIP, cardAddress,
 			Logs.debug(`Running: rolltrak -a ${requestIP} ${toRun}`);
 			jobs++
 			await rolltrak.run(`rolltrak -a ${requestIP} ${toRun}`, false).then(()=>{jobs--});
-
+			jobs--
 			if (Object.keys(takes).length > 0) {
 				const toTake = Object.keys(takes).map(take => `${take}@0000:${cardAddress}:${cardSlot}=1`).join(' ');
 				Logs.debug(`Running: rolltrak -a ${requestIP} ${toTake}`);
@@ -551,7 +569,7 @@ function computeGroupCommands(group, frameNumber, slotNumber) {
 		const command = groups[group].commands[commandID];
 		if (!command.enabled) continue;
 		
-		const value = command.value.replaceAll('FRAME', frameNumber).replaceAll('SLOT', slotNumber).replaceAll('CARD', Math.ceil(slotNumber/2));
+		const value = command.value.replaceAll('FRAME', frameNumber).replaceAll('SLOT', slotNumber).replaceAll('CARD', Math.floor(slotNumber/2));
 
 		if (command.type == "card") {
 			commands[commandID] = parseCommand(value, command.dataType, command.take)
@@ -633,7 +651,6 @@ async function checkCard(cardIP) {
 
 async function getInfo(commandID, frameIP, slot, address = '10') {
 	jobs++
-	Logs.debug(`Jobs: ${jobs}`);
 	try {
 		const rolltrak = new Shell(Logs, 'DDS', 'D');
 		Logs.info(`rolltrak -a ${frameIP} ${commandID}@0000:${address}:${slot}?`);
@@ -687,6 +704,7 @@ function startLoops() {
 			if (!Object.prototype.hasOwnProperty.call(frames, frameIP)) return
 			checkFrame(frameIP)
 		}
+		Logs.debug(`Current Jobs: ${jobs}`);
 	}, pollRate*1000)
 
 	setInterval(()=>{
@@ -705,6 +723,9 @@ function save() {
 
 function loadData(file) {
 	try {
+		if (!fs.existsSync(`${__data}/data/`)){
+			fs.mkdirSync(`${__data}/data/`);
+		}
 		const dataRaw = fs.readFileSync(`${__data}/data/${file}.json`);
 		try {
 			return JSON.parse(dataRaw);
@@ -726,6 +747,9 @@ function loadData(file) {
 
 function writeData(file, data) {
 	try {
+		if (!fs.existsSync(`${__data}/data/`)){
+			fs.mkdirSync(`${__data}/data/`);
+		}
 		fs.writeFileSync(`${__data}/data/${file}.json`, JSON.stringify(data, undefined, 2));
 	} catch (error) {
 		Logs.error(`Could not write the file ${file}.json, do we have permission to access the file?`, error);
