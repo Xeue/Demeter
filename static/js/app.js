@@ -281,7 +281,7 @@ function drawCommand(prefix, command, commandID, editValue = null, readValue = n
 	const deps = command.depends ? JSON.stringify(command.depends).replace(/\"/g, "'") : '';
 	const _cont = document.createElement('div');
 	_cont.classList.add('commandCont');
-	_cont.setAttribute('data-command', commandID)
+	_cont.setAttribute('data-command', commandID);
 	_cont.setAttribute('data-name', command.name);
 	_cont.setAttribute('data-type', command.type);
 	_cont.setAttribute('data-take', command.take);
@@ -308,6 +308,7 @@ function drawCommand(prefix, command, commandID, editValue = null, readValue = n
 				default:
 					break;
 			}
+			if (command.shuffle) val = readValue;
 			if (readValue == "ERROR") {
 				match = '';
 				val = 'ERROR'
@@ -316,7 +317,7 @@ function drawCommand(prefix, command, commandID, editValue = null, readValue = n
 			} else {
 				match = readValue == command.default ? 'bg-success' : 'bg-danger'
 			}
-			_cont.insertAdjacentHTML('beforeend', `<div class="commandRead form-control form-control-sm w-75 ${match}">${val}</div>`);
+			_cont.insertAdjacentHTML('beforeend', `<div class="commandRead form-control form-control-sm w-75 ${match}" data-raw="${readValue}">${val}</div>`);
 		} else {
 			_cont.insertAdjacentHTML('beforeend', `<div class="commandRead"></div>`);
 		}
@@ -429,24 +430,47 @@ function updateCommand(_command, command, prefered = null, active, computed = nu
 				_read.innerHTML = active;
 				break;
 		}
+		if (command.shuffle) _read.innerHTML = active;
 		try {
 			_read.classList.remove('bg-success', 'bg-danger');
 		} catch (error) {
 			console.log(error)
 		}
+
+		const enabled = _command.querySelector('.frame_commandEnabled').checked;
+
 		if (active == "ERROR") {
 			_read.innerHTML = "ERROR";
-		} else if (prefered != null) {
-			if (prefered.value == active) {
-				_read.classList.add('bg-success');
-			} else {
-				_read.classList.add('bg-danger');
-			}
 		} else {
-			if (command.default == active) {
-				_read.classList.add('bg-success');
+
+			if (enabled) {
+				if (prefered != null) {
+					if (prefered.value == active) {
+						_read.classList.add('bg-success');
+					} else {
+						_read.classList.add('bg-danger');
+					}
+				} else {
+					if (command.default == active) {
+						_read.classList.add('bg-success');
+					} else {
+						_read.classList.add('bg-danger');
+					}
+				}
 			} else {
-				_read.classList.add('bg-danger');
+				if (computed != null) {
+					if (computed == active) {
+						_read.classList.add('bg-success');
+					} else {
+						_read.classList.add('bg-danger');
+					}
+				} else {
+					if (command.default == active) {
+						_read.classList.add('bg-success');
+					} else {
+						_read.classList.add('bg-danger');
+					}
+				}
 			}
 		}
 

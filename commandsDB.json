@@ -11,24 +11,28 @@
                         "1": "Static",
                         "0": "DHCP"
                     },
+                    "restart": true,
                     "take": 4114
                 },{
                     "command": 4101,
                     "name": "IP",
                     "type": "smartip",
                     "depends": {"4108":1},
+                    "restart": true,
                     "take": 4114
                 },{
                     "command": 4103,
                     "name": "Gateway",
                     "type": "smartip",
                     "depends": {"4108":1},
+                    "restart": true,
                     "take": 4114
                 },{
                     "command": 4105,
                     "name": "Netmask",
                     "type": "smartip",
                     "depends": {"4108":1},
+                    "restart": true,
                     "take": 4114
                 }]
         },{
@@ -42,24 +46,28 @@
                         "1": "Static",
                         "0": "DHCP"
                     },
+                    "restart": true,
                     "take": 4214
                 },{
                     "command": 4201,
                     "name": "IP",
                     "type": "smartip",
                     "depends": {"4208":1},
+                    "restart": true,
                     "take": 4214
                 },{
                     "command": 4203,
                     "name": "Gateway",
                     "type": "smartip",
                     "depends": {"4208":1},
+                    "restart": true,
                     "take": 4214
                 },{
                     "command": 4205,
                     "name": "Netmask",
                     "type": "smartip",
                     "depends": {"4208":1},
+                    "restart": true,
                     "take": 4214
                 }]
         },{
@@ -165,11 +173,13 @@
                     "command": 48729,
                     "name": "Disable ST2110-30 Senders",
                     "type": "boolean",
+                    "restart": true,
                     "default": 1
                 },{
                     "command": 48730,
                     "name": "Disable ST2110-30 Recievers",
                     "type": "boolean",
+                    "restart": true,
                     "default": 1
                 },{
                     "command": 48700,
@@ -712,10 +722,12 @@
                     },
                     "take": 50002
                 },{
-                    "command": "shuffle",
+                    "command": 50265,
                     "name": "Spigot Shuffling",
                     "type": "select",
+                    "increment": 300,
                     "default": 0,
+                    "shuffle": true,
                     "options": {
                         "0":"Pass-through",
                         "2":"Mute",

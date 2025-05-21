@@ -333,7 +333,13 @@ header:has(.collapseHeader:checked) + .collapseSection {
    align-items: center;
 }
 
-.form-switch:has(.commandEnabled:not(:checked)) ~* {
+.commandRead {
+   border-radius: 5px;
+   padding: 0.1rem 0.5rem;
+   width: 75%;
+}
+
+.form-switch:has(.commandEnabled:not(:checked)) ~.commandInput {
    color: dimgrey;
    opacity: 0.5;
    /* cursor: not-allowed;

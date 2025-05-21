@@ -411,24 +411,32 @@ async function checkFrame(frameIP) {
 	Logs.info(`Frame: ${frameIP} found slots`, foundSlots);
 	foundSlots.forEach(async slot => {
 		slotsPromises.push(new Promise(async (resolve, reject) => {
+			const slotHex = Number(slot).toString(16).padStart(2, '0');
 			let checkNull = false;
-			const [cardIPA, err1] = await getInfo(4101, frameIP, slot, address);
-			const [cardIPB, err2] = await getInfo(4201, frameIP, slot, address);
+			const [cardIPA, err1] = await getInfo(4101, frameIP, slotHex, address);
+			const [cardIPB, err2] = await getInfo(4201, frameIP, slotHex, address);
 			if (err1 && err2) {
 				Logs.warn('Error resolving IPs of card', [cardIPA, cardIPB]);
 				return resolve();
 			}
-			let requestIP = frameIP;
-			if (cardIPB && (cardIPB !== "StringVal")) {
-				requestIP = cardIPB;
-			}
-			if (cardIPA && (cardIPA !== "StringVal")) {
-				requestIP = cardIPA;
+
+			let requestIP = '';
+
+			const [card1UP, err3] = await getInfo(4128, frameIP, slotHex, address);
+			const [card2UP, err4] = await getInfo(4228, frameIP, slotHex, address);
+			if (err3 && err4) {
+				Logs.warn('Failed to get status of card IPs', [card1UP, card2UP]);
+				return resolve();
 			}
 
-			if (cardIPA == "StringVal" && cardIPB == "StringVal") {
-				Logs.warn(`IPs for slot: ${slot} not found`);
-				return resolve();
+			if (card1UP == "UP" && cardIPA !== "StringVal" && cardIPA !== "No rollcall connection") {
+				requestIP = cardIPA;
+				Logs.debug(`Using primary IP: ${cardIPA}`)
+			} else if (card2UP == "UP" && cardIPB !== "StringVal" && cardIPB !== "No rollcall connection") {
+				requestIP = cardIPB;
+				Logs.debug(`Using secondary IP: ${cardIPB}`)
+			} else {
+				Logs.warn(`IPs for slot: ${slot} not found or not online`);
 			}
 
 			const [slotInfo, err] = await checkCard(requestIP)
@@ -436,9 +444,18 @@ async function checkFrame(frameIP) {
 				checkNull = true;
 			}
 
+			if (frame.slots[slot].active === undefined) frame.slots[slot].active = {}
+			if (frame.slots[slot].active['4101'] == undefined && cardIPA !== "StringVal" && cardIPA !== "No rollcall connection") {
+				frame.slots[slot].active['4101'] = cardIPA
+			}
+
+			if (frame.slots[slot].active['4201'] == undefined && cardIPB !== "StringVal" && cardIPB !== "No rollcall connection") {
+				frame.slots[slot].active['4201'] = cardIPB
+			}
+
 			if (!frame.slots[slot]) frame.slots[slot] = {};
-			frame.slots[slot].ipa = cardIPA ? cardIPA : null;
-			frame.slots[slot].ipb = cardIPB ? cardIPB : null;
+			frame.slots[slot].ipa = cardIPA == "StringVal" ? null : cardIPA;
+			frame.slots[slot].ipb = cardIPB == "StringVal" ? null : cardIPB;
 			frame.slots[slot].ins = slotInfo.ins;
 			frame.slots[slot].outs = slotInfo.outs;
 			frame.slots[slot].active = slotInfo.active;
@@ -451,8 +468,6 @@ async function checkFrame(frameIP) {
 				"slots": frame.slots
 			});
 
-			if (!frame.enabled || !frame.slots[slot].enabled) return resolve();
-
 			const cardCommands = {};
 			const frameCommands = {};
 			const cardTakes = {};
@@ -460,7 +475,7 @@ async function checkFrame(frameIP) {
 			const cardSlot = '00';
 			const cardAddress = '30';
 
-			for (const command in frame.slots[slot].group) {
+			for (const command in frame.slots[slot].group) { // Working out groups commands
 				const cmd = frame.slots[slot].group[command];
 				if (!cmd.enabled) continue;
 				if (cmd.value == null) continue;
@@ -488,7 +503,7 @@ async function checkFrame(frameIP) {
 				}
 			}
 
-			for (const command in frame.slots[slot].prefered) {
+			for (const command in frame.slots[slot].prefered) { // Working out card commands
 				const cmd = frame.slots[slot].prefered[command];
 				if (!cmd.enabled) continue;
 				if (cmd.value == null) continue;
@@ -508,10 +523,11 @@ async function checkFrame(frameIP) {
 				}
 			}
 
-			Logs.debug('Sending commands', frameCommands);
-
-			doCommands(rolltrak, frameCommands, frameTakes, frameIP, "10", slot).then(()=>{
-				doCommands(rolltrak, cardCommands, cardTakes, requestIP, cardAddress, cardSlot);
+			if (!frame.enabled || !frame.slots[slot].enabled) return resolve();
+			Logs.debug(`Frame: ${frameIP} Commands that need sending`, frameCommands);
+			
+			doCommands(rolltrak, frameCommands, frameTakes, frameIP, "10", slotHex).then(()=>{
+				if (card1UP == "UP" || card2UP == "UP") doCommands(rolltrak, cardCommands, cardTakes, requestIP, cardAddress, cardSlot);
 			});
 			save();
 			resolve();
@@ -547,12 +563,14 @@ async function doCommands(rolltrak, cardCommands, takes, requestIP, cardAddress,
 			const toRun = commandsArray.map(command => `${command.command}=${command.value}`).join(' ');
 			Logs.debug(`Running: rolltrak -a ${requestIP} ${toRun}`);
 			jobs++
-			await rolltrak.run(`rolltrak -a ${requestIP} ${toRun}`, false).then(()=>{jobs--});
+			await rolltrak.run(`rolltrak -a ${requestIP} ${toRun}`, false);
 			jobs--
 			if (Object.keys(takes).length > 0) {
 				const toTake = Object.keys(takes).map(take => `${take}@0000:${cardAddress}:${cardSlot}=1`).join(' ');
 				Logs.debug(`Running: rolltrak -a ${requestIP} ${toTake}`);
-				await rolltrak.run(`rolltrak -a ${requestIP} ${toTake}`, false).then(()=>{jobs--});
+				// jobs++
+				// await rolltrak.run(`rolltrak -a ${requestIP} ${toTake}`, false);
+				// jobs--
 			}
 		} catch (error) {
 			Logs.error('Error sending changes', error)
@@ -620,14 +638,14 @@ async function checkCard(cardIP) {
 
 	commandsDB.card.forEach(group => {
 		group.commands.forEach(command => {
-			if (command.command != "shuffle") commands.push(command.command);
+			if (!command.shuffle) commands.push(command.command);
 		})
 	});
 
 	for (let index = 0; index < slotInfo.ins; index++) {		
 		commandsDB.spigot.forEach(group => {
 			group.commands.forEach(command => {
-				if (command.command != "shuffle") commands.push(command.command + (command.increment*index));
+				commands.push(command.command + (command.increment*index));
 			})
 		});
 	}
@@ -698,6 +716,12 @@ function parseTrackData(rows) {
 
 
 function startLoops() {
+	Logs.debug("Scanning all frames")
+	for (const frameIP in frames) {
+		if (!Object.prototype.hasOwnProperty.call(frames, frameIP)) return
+		checkFrame(frameIP)
+	}
+	Logs.debug(`Current Jobs: ${jobs}`);
 	setInterval(()=>{
 		Logs.debug("Scanning all frames")
 		for (const frameIP in frames) {
