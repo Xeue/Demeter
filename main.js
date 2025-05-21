@@ -444,7 +444,14 @@ async function checkFrame(frameIP) {
 				checkNull = true;
 			}
 
-			if (frame.slots[slot].active === undefined) frame.slots[slot].active = {}
+			if (!frame.slots[slot]) frame.slots[slot] = {};
+			if (!frame.slots[slot].active) frame.slots[slot].active = {}
+	
+			frame.slots[slot].ipa = cardIPA == "StringVal" ? null : cardIPA;
+			frame.slots[slot].ipb = cardIPB == "StringVal" ? null : cardIPB;
+			frame.slots[slot].ins = slotInfo.ins;
+			frame.slots[slot].outs = slotInfo.outs;
+			frame.slots[slot].active = slotInfo.active;
 			if (frame.slots[slot].active['4101'] == undefined && cardIPA !== "StringVal" && cardIPA !== "No rollcall connection") {
 				frame.slots[slot].active['4101'] = cardIPA
 			}
@@ -453,12 +460,6 @@ async function checkFrame(frameIP) {
 				frame.slots[slot].active['4201'] = cardIPB
 			}
 
-			if (!frame.slots[slot]) frame.slots[slot] = {};
-			frame.slots[slot].ipa = cardIPA == "StringVal" ? null : cardIPA;
-			frame.slots[slot].ipb = cardIPB == "StringVal" ? null : cardIPB;
-			frame.slots[slot].ins = slotInfo.ins;
-			frame.slots[slot].outs = slotInfo.outs;
-			frame.slots[slot].active = slotInfo.active;
 			frame.slots[slot].group = computeGroupCommands(frame.group, frame.number, slot);
 			if (!frame.slots[slot].prefered) frame.slots[slot].prefered = {}
 
