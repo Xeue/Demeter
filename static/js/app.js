@@ -31,6 +31,19 @@ document.addEventListener('DOMContentLoaded', () => {
 		const frames = await _input.files.item(0).text()
 		backend.send('setFrames', JSON.parse(frames));
 	})
+	on('click', '.cardReboot', _element => {
+		const slot = _element.closest('.slotCont').getAttribute('data-slot')
+		const frameIP = _element.closest('.frameCont').getAttribute('data-ip')
+		backend.send('cardReboot', {"frameIP":frameIP, "slot": slot});
+	})
+	on('click', '#showOffline', _element => {
+		const _body = document.getElementById('body');
+		if (_element.checked) {
+			_body.classList.add('showOffline');
+		} else {
+			_body.classList.remove('showOffline');
+		}
+	})
 
 	/* Frame controls */
 
@@ -101,6 +114,7 @@ function drawFrames(frames) {
 function drawFrame(frame) {
 	const _frameCont = document.createElement('section');
 	_frameCont.classList.add('frameCont');
+	if (frame.offline) _frameCont.classList.add('offline')
 	_frameCont.setAttribute('data-ip', frame.ip);
 	const _header = `<header>
 		<input type="checkbox" class="form-check form-check-input collapseHeader" id="frame_${frame.ip.replaceAll('.','_')}" checked>
@@ -134,14 +148,18 @@ function drawSlotInfo(slotInfo) {
 
 		if (!_slotCont) {
 			_slotCont = document.createElement('section');
+			_slotCont.classList.add('slotCont');
 			_slotCont.classList.add('groupCont');
 			_slotCont.setAttribute('data-slot', slotName);
-			_slotCont.classList.add('slotCont');
+			if (slot.offline) _slotCont.classList.add('offline');
 			_frameData.appendChild(_slotCont);
 			_slotCont.insertAdjacentHTML('beforeend', `<header>
 				<input type="checkbox" class="form-check form-check-input collapseHeader" id="header_${frameIP.replaceAll('.','_')}_${slotName}">
 				<label class="groupName" for="header_${frameIP.replaceAll('.','_')}_${slotName}">Slot ${slotName}</label>
 				<div class="form-switch"><input type="checkbox" class="form-check-input slotEnable" ${slot.enabled ? 'checked' : ''}></div>
+				<div class="cardIface me-2" data-status="${slot.ipaup}">Media 1: ${slot.ipa} - ${slot.ipaup}</div>
+				<div class="cardIface" data-status="${slot.ipbup}">Media 2: ${slot.ipb} - ${slot.ipbup}</div>
+				<button class="cardReboot btn btn-secondary btn-sm ms-auto">Reboot</button>
 			</header>`);
 		}
 		
@@ -268,6 +286,11 @@ function doFrameStatus(data) {
 		const _framesCont = document.getElementById('framesCont');
 		const _frame = _framesCont.querySelector(`[data-ip="${data.frameIP}"]`);
 		const _status = _frame.querySelector('.frameStatus');
+		if (data.offline) {
+			_frame.classList.add('offline');
+		} else {
+			_frame.classList.remove('offline');
+		}
 		_status.innerHTML = data.status;
 	} catch (error) {
 		console.log(error)

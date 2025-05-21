@@ -262,6 +262,8 @@ body.micaActive {
     background-image: url('../img/multi.png');
 }
 
+input,
+label,
 #showSelect,
 .btn {
 	app-region: no-drag;
@@ -337,6 +339,29 @@ header:has(.collapseHeader:checked) + .collapseSection {
    border-radius: 5px;
    padding: 0.1rem 0.5rem;
    width: 75%;
+}
+
+.cardIface[data-status="UP"] {
+   background: #345b34;
+}
+
+.cardIface {
+   background: #714343;
+   padding: 0.1rem 0.3rem;
+   border-radius: 5px;
+}
+
+.slotCont.offline {
+   display: none;
+}
+
+.showOffline .slotCont.offline {
+   display: block;
+}
+
+.slotCont.offline > header,
+.frameCont.offline > header {
+   background: #5b1b1b;
 }
 
 .form-switch:has(.commandEnabled:not(:checked)) ~.commandInput {

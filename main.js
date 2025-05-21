@@ -231,6 +231,13 @@ async function setUpApp() {
 		save();
 	})
 
+	frontend.on('cardReboot', (event, data) => {
+		const rolltrak = new Shell(Logs, 'CHECK', 'D');
+		let command = `rolltrak -a ${data.frameIP} 4114@0000:10:${data.slot}=1`;
+		Logs.debug(`Rebboting frame: ${data.frameIP}, slot: ${data.slot}`)
+		rolltrak.run(command, false);
+	})
+
 	/* Groups */
 
 	frontend.on('addGroup', (event,data) => {
@@ -377,9 +384,14 @@ async function checkFrame(frameIP) {
 	const frame = frames[frameIP]
 	const foundSlots = [];
 
-	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Getting rollcall address of frame'});
+	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Getting rollcall address of frame', 'offline':frame.offline});
 	const [unitAddress, err] = await getInfo(17044, frameIP, '00', '00');
-	if (err) return Logs.warn(unitAddress);
+	if (err) {
+		frame.offline = true;
+		save()
+		Logs.warn(unitAddress);
+		return
+	}
 	const address = unitAddress.split('= 0x')[1] || '10';
 
 	let command = `rolltrak -a ${frameIP} 0@0000:${address}:10?`;
@@ -389,20 +401,24 @@ async function checkFrame(frameIP) {
 	}
 
 	Logs.info(command);
-	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Discovering cards within frame'});
+	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Discovering cards within frame', 'offline':frame.offline});
 	jobs++
 	const {stdout} = await rolltrak.run(command, false);
 	jobs--
 	const slotsData = parseTrackData(stdout);
 
-	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Checking cards current config'});
+	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Checking cards current config', 'offline':frame.offline});
 	slotsData.forEach((slotInfo, index) => {
 		const slot = String((1+index).toString(10)).padStart(2, '0')
 		try {
-			if (!slotInfo.includes('IQUCP25_SDI')) return Logs.info(`Frame: ${frameIP} Slot: ${slot} is not a UCP`);
+			if (!slotInfo.includes('IQUCP25_SDI')) {
+				Logs.info(`Frame: ${frameIP} Slot: ${slot} is not a UCP`);
+				if (frame.slots[slot]) frame.slots[slot].offline = true;
+				return
+			}
 			foundSlots.push(slot);
 		} catch (error) {
-			Logs.warn(`Issue with slot: ${slot} at IP: ${frameIP}`, error);
+			return Logs.warn(`Issue with slot: ${slot} at IP: ${frameIP}`, error);
 		}
 	});
 
@@ -439,19 +455,25 @@ async function checkFrame(frameIP) {
 				Logs.warn(`IPs for slot: ${slot} not found or not online`);
 			}
 
-			const [slotInfo, err] = await checkCard(requestIP)
-			if (err) {
-				checkNull = true;
-			}
-
 			if (!frame.slots[slot]) frame.slots[slot] = {};
-			if (!frame.slots[slot].active) frame.slots[slot].active = {}
-	
+			if (frame.slots[slot].active === undefined) frame.slots[slot].active = {}
+			
 			frame.slots[slot].ipa = cardIPA == "StringVal" ? null : cardIPA;
 			frame.slots[slot].ipb = cardIPB == "StringVal" ? null : cardIPB;
-			frame.slots[slot].ins = slotInfo.ins;
-			frame.slots[slot].outs = slotInfo.outs;
-			frame.slots[slot].active = slotInfo.active;
+			frame.slots[slot].ipaup = card1UP;
+			frame.slots[slot].ipbup = card2UP;
+
+			if (requestIP) {
+				const [slotInfo, err] = await checkCard(requestIP)
+				frame.slots[slot].ins = slotInfo.ins;
+				frame.slots[slot].outs = slotInfo.outs;
+				if (slotInfo.active !== undefined) frame.slots[slot].active = slotInfo.active;
+				if (err) {
+					Logs.warn(`Frame: ${frameIP}, Slot: ${slot} issue`, slotInfo);
+					checkNull = true;
+				}
+			}
+
 			if (frame.slots[slot].active['4101'] == undefined && cardIPA !== "StringVal" && cardIPA !== "No rollcall connection") {
 				frame.slots[slot].active['4101'] = cardIPA
 			}
@@ -460,10 +482,11 @@ async function checkFrame(frameIP) {
 				frame.slots[slot].active['4201'] = cardIPB
 			}
 
+
 			frame.slots[slot].group = computeGroupCommands(frame.group, frame.number, slot);
 			if (!frame.slots[slot].prefered) frame.slots[slot].prefered = {}
 
-			Logs.info('Sending slot into to front end');
+			Logs.info('Sending slot info to front end');
 			frontend.send('slotInfo', {
 				"frame": frame,
 				"slots": frame.slots
@@ -524,6 +547,8 @@ async function checkFrame(frameIP) {
 				}
 			}
 
+			save();
+
 			if (!frame.enabled || !frame.slots[slot].enabled) return resolve();
 			Logs.debug(`Frame: ${frameIP} Commands that need sending`, frameCommands);
 			
@@ -536,7 +561,7 @@ async function checkFrame(frameIP) {
 	})
 	await Promise.all(slotsPromises);
 	save();
-	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Retrieved current cards and config'});
+	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Retrieved current cards and config', 'offline':frame.offline});
 }
 
 async function doCommands(rolltrak, cardCommands, takes, requestIP, cardAddress, cardSlot) {
@@ -631,9 +656,13 @@ async function checkCard(cardIP) {
 		Logs.warn(IOString);
 		return [slotInfo, true];
 	}
-	const [[string, ins, outs]] = IOString.matchAll(/([0-9]{1,2}) In.*?([0-9]{1,2}) Out/g);
-	slotInfo.ins = Number(ins);
-	slotInfo.outs = Number(outs);
+	try {		
+		const [[string, ins, outs]] = IOString.matchAll(/([0-9]{1,2}) In.*?([0-9]{1,2}) Out/g);
+		slotInfo.ins = Number(ins);
+		slotInfo.outs = Number(outs);
+	} catch (error) {
+		return ['Unable to match on IO string', true]
+	}
 
 	let commands = [];
 
@@ -680,18 +709,18 @@ async function getInfo(commandID, frameIP, slot, address = '10') {
 			outArr = stdout[0].split('\r\n');
 		} catch (error) {
 			jobs--
-			return ['Failed to parse rollcall data', true];
+			return [`Frame: ${frameIP}, Slot: ${slot}, Failed to parse rollcall data`, true];
 		}
 		const checkOut = outArr.length > 1 ? 1 : 0;
 		const returnString = outArr[checkOut];
 		if (returnString.includes('No rollcall connection')) {
 			jobs--
-			return ['No rollcall connection', true];
+			return [`Frame: ${frameIP}, Slot: ${slot}, No rollcall connection`, true];
 		}
 		jobs--
 		return [returnString.split('\t')[7], false];
 	} catch (error) {
-		Logs.warn(`General error connecting to ${slot} at IP: ${frameIP}`, error);
+		Logs.warn(`Frame: ${frameIP}, Slot: ${slot}, General error connecting`, error);
 		jobs--
 		return ['', true];
 	}
