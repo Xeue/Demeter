@@ -1,0 +1,820 @@
+{
+    "card": [
+        {
+            "name": "Ethernet 1 Settings (Key words: FRAME, CARD, SLOT, SPIGOT)",
+            "commands": [{
+                    "command": 4108,
+                    "name": "Mode",
+                    "type": "select",
+                    "default": 1,
+                    "options": {
+                        "1": "Static",
+                        "0": "DHCP"
+                    },
+                    "restart": true,
+                    "take": 4114
+                },{
+                    "command": 4101,
+                    "name": "IP",
+                    "type": "smartip",
+                    "depends": {"4108":1},
+                    "restart": true,
+                    "take": 4114
+                },{
+                    "command": 4103,
+                    "name": "Gateway",
+                    "type": "smartip",
+                    "depends": {"4108":1},
+                    "restart": true,
+                    "take": 4114
+                },{
+                    "command": 4105,
+                    "name": "Netmask",
+                    "type": "smartip",
+                    "depends": {"4108":1},
+                    "restart": true,
+                    "take": 4114
+                }]
+        },{
+            "name": "Ethernet 2 Settings (Key words: FRAME, CARD, SLOT, SPIGOT)",
+            "commands": [{
+                    "command": 4208,
+                    "name": "Mode",
+                    "type": "select",
+                    "default": 1,
+                    "options": {
+                        "1": "Static",
+                        "0": "DHCP"
+                    },
+                    "restart": true,
+                    "take": 4214
+                },{
+                    "command": 4201,
+                    "name": "IP",
+                    "type": "smartip",
+                    "depends": {"4208":1},
+                    "restart": true,
+                    "take": 4214
+                },{
+                    "command": 4203,
+                    "name": "Gateway",
+                    "type": "smartip",
+                    "depends": {"4208":1},
+                    "restart": true,
+                    "take": 4214
+                },{
+                    "command": 4205,
+                    "name": "Netmask",
+                    "type": "smartip",
+                    "depends": {"4208":1},
+                    "restart": true,
+                    "take": 4214
+                }]
+        },{
+            "name": "Reference/PTP",
+            "commands": [{
+                    "command": 4501,
+                    "name": "Reference Source",
+                    "type": "select",
+                    "default": 1,
+                    "options": {
+                        "1":"PTP",
+                        "3":"Chassis A",
+                        "4":"Chassis B"
+                    }
+                },{
+                    "command": 21000,
+                    "name": "PTP",
+                    "type": "select",
+                    "default": 1,
+                    "options": {
+                        "1": "Multicast",
+                        "2": "Unicast",
+                        "0": "Freerun",
+                        "3": "NTP"
+                    },
+                    "depends": {"4501":1}
+                },{
+                    "command": 21010,
+                    "name": "PTP Domain",
+                    "type": "text",
+                    "default": 127,
+                    "depends": {"4501":1}
+                },{
+                    "command": 21013,
+                    "name": "PTP Multicast Address",
+                    "type": "smartip",
+                    "depends": {"4501":1, "21000":1}
+                },{
+                    "command": 21074,
+                    "name": "PTP Preference",
+                    "type": "select",
+                    "default": 3,
+                    "options": {
+                        "3":"Best",
+                        "0":"Ethernet 1",
+                        "1":"Ethermet 2",
+                        "2":"None"
+                    },
+                    "depends": {"4501":1}
+                },{
+                    "command": 21046,
+                    "name": "Enable PTP on Ethernet 1",
+                    "type": "boolean",
+                    "default": 1,
+                    "depends": {"4501":1}
+                },{
+                    "command": 21047,
+                    "name": "Enable PTP on Ethernet 2",
+                    "type": "boolean",
+                    "default": 1,
+                    "depends": {"4501":1}
+                }]
+        },{
+            "name": "NMOS Settings",
+            "commands": [{
+                    "command": 4052,
+                    "name": "Enabled",
+                    "type": "select",
+                    "default": 2,
+                    "take": 4051,
+                    "options": {
+                        "0":"Off",
+                        "2":"On"
+                    }
+                },{
+                    "command": 4056,
+                    "name": "Registry",
+                    "type": "select",
+                    "default": 0,
+                    "take": 4051,
+                    "options": {
+                        "0":"Static",
+                        "1":"Auto"
+                    },
+                    "depends": {"4052":2}
+                },{
+                    "command": 4054,
+                    "name": "Interface",
+                    "type": "select",
+                    "default": 0,
+                    "take": 4051,
+                    "options": {
+                        "2": "Ethernet 1",
+                        "3": "Ethernet 2",
+                        "1": "Control",
+                        "0": "Auto"
+                    },
+                    "depends": {"4052":2}
+                }]
+        },{
+            "name": "Interop",
+            "commands": [{
+                    "command": 48729,
+                    "name": "Disable ST2110-30 Senders",
+                    "type": "boolean",
+                    "restart": true,
+                    "default": 1
+                },{
+                    "command": 48730,
+                    "name": "Disable ST2110-30 Recievers",
+                    "type": "boolean",
+                    "restart": true,
+                    "default": 1
+                },{
+                    "command": 48700,
+                    "name": "Extender headers audio",
+                    "type": "boolean",
+                    "default": 1
+                },{
+                    "command": 48703,
+                    "name": "Extender headers meta",
+                    "type": "boolean",
+                    "default": 1
+                }]
+        },{
+            "name": "Link Control",
+            "commands": [
+                {
+                    "command": 49700,
+                    "name": "Link 1-4",
+                    "type": "boolean",
+                    "default": 0
+                },{
+                    "command": 49701,
+                    "name": "Link 5-8",
+                    "type": "boolean",
+                    "default": 0
+                },{
+                    "command": 49702,
+                    "name": "Link 9-12",
+                    "type": "boolean",
+                    "default": 0
+                },{
+                    "command": 49703,
+                    "name": "Link 13-16",
+                    "type": "boolean",
+                    "default": 0
+                }
+            ]
+        },{
+            "name": "HDR",
+            "commands": [
+                {
+                    "command":35500,
+                    "name": "1 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35516,
+                    "name": "1 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35501,
+                    "name": "2 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35517,
+                    "name": "2 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35502,
+                    "name": "3 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35518,
+                    "name": "3 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35503,
+                    "name": "4 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35519,
+                    "name": "4 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35504,
+                    "name": "5 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35520,
+                    "name": "5 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35505,
+                    "name": "6 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35521,
+                    "name": "6 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35506,
+                    "name": "7 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35522,
+                    "name": "7 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35507,
+                    "name": "8 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35523,
+                    "name": "8 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35508,
+                    "name": "9 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35524,
+                    "name": "9 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35509,
+                    "name": "10 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35525,
+                    "name": "10 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35510,
+                    "name": "11 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35526,
+                    "name": "11 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35511,
+                    "name": "12 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35527,
+                    "name": "12 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35512,
+                    "name": "13 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35528,
+                    "name": "13 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35513,
+                    "name": "14 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35529,
+                    "name": "14 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35514,
+                    "name": "15 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35530,
+                    "name": "15 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35515,
+                    "name": "16 Transfer",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"SDR",
+                        "1":"HDR-HLG",
+                        "2":"HRD-PQ",
+                        "3":"Other"
+                    }
+                },{
+                    "command":35531,
+                    "name": "16 Colorimetry",
+                    "type": "select",
+                    "take": 35636,
+                    "increment": 1,
+                    "default": 0,
+                    "options": {
+                        "0":"709",
+                        "2":"2020",
+                        "3":"Other"
+                    }
+                }
+            ]
+        }
+    ],
+    "spigot": [
+        {
+            "name": "Interop",
+            "commands": [{
+                "command": 50007,
+                "name": "Extended Headers",
+                "type": "select",
+                "default": 1,
+                "options": {
+                    "0":"On",
+                    "1":"Off",
+                    "2":"On Legacy"
+                },
+                "increment": 300,
+                "take": 50002
+            },{
+                "command": 50034,
+                "name": "Number of flows",
+                "type": "select",
+                "increment": 300,
+                "default": 1,
+                "options": {
+                    "1":1,
+                    "2":2,
+                    "4":4
+                },
+                "take": 50002
+            }]
+        },{
+            "name": "Audio Setting",
+            "commands": [{
+                    "command":50123,
+                    "name": "IP",
+                    "type": "smartip",
+                    "increment": 300,
+                    "take": 50002
+                },{
+                    "command":50125,
+                    "name": "Port",
+                    "type": "text",
+                    "default": 5004,
+                    "increment": 300,
+                    "take": 50002
+                },{
+                    "command":50127,
+                    "name": "Source IP",
+                    "type": "smartip",
+                    "increment": 300,
+                    "take": 50002
+                },{
+                    "command":50129,
+                    "name": "Source Port",
+                    "type": "text",
+                    "default": 5004,
+                    "increment": 300,
+                    "take": 50002
+                },{
+                    "command":50132,
+                    "name": "Flow Type",
+                    "type": "select",
+                    "increment": 300,
+                    "default": 4,
+                    "options": {
+                        "0":"None",
+                        "4":"2110-30"
+                    },
+                    "take": 50002
+                },{
+                    "command": 58645,
+                    "name": "Packet Timing",
+                    "type": "select",
+                    "increment": 14,
+                    "default": 1,
+                    "options": {
+                        "1":"125us",
+                        "2":"250us",
+                        "3":"500us",
+                        "4":"1ms",
+                        "5":"4ms"
+                    },
+                    "take": 50002
+                },{
+                    "command": 58644,
+                    "name": "Channel Count",
+                    "type": "select",
+                    "increment": 14,
+                    "default": 16,
+                    "options": {
+                        "1":1,
+                        "2":2,
+                        "4":4,
+                        "8":8,
+                        "16":16,
+                        "32":32,
+                        "64":64
+                    },
+                    "take": 50002
+                },{
+                    "command": 50265,
+                    "name": "Spigot Shuffling",
+                    "type": "select",
+                    "increment": 300,
+                    "default": 0,
+                    "shuffle": true,
+                    "options": {
+                        "0":"Pass-through",
+                        "2":"Mute",
+                        "3":"Tone",
+                        "4":"Custom"
+                    },
+                    "take": 50002
+                }]
+        },{
+            "name": "Video Settings",
+            "commands": [{
+                    "command":50083,
+                    "name": "IP",
+                    "type": "smartip",
+                    "increment": 300,
+                    "take": 50002
+                },{
+                    "command":50085,
+                    "name": "Port",
+                    "type": "text",
+                    "default": 50100,
+                    "increment": 300,
+                    "take": 50002
+                },{
+                    "command":50087,
+                    "name": "Source IP",
+                    "type": "smartip",
+                    "increment": 300,
+                    "take": 50002
+                },{
+                    "command":50089,
+                    "name": "Source Port",
+                    "type": "text",
+                    "default": 50100,
+                    "increment": 300,
+                    "take": 50002
+                },{
+                    "command":50092,
+                    "name": "Flow Type",
+                    "type": "select",
+                    "increment": 300,
+                    "default": 2,
+                    "options": {
+                        "0":"None",
+                        "2":"2110-20"
+                    },
+                    "take": 50002
+            }]
+        }
+    ]
+}
+
+
+//4052 NMOS mode 0 = OFF 2 = ON
+//4056 NMOS Registry 1=AUTO 2=Statis
+//4054 NMOS Int 0=auto 1=GB 2=Eth1 3=Eth2
+//4051 NMOS Take 1
+
+//4101 - IP
+//4103 - Gateway
+//4105 - Netmask
+//4108 - Mode 1 = static
+
+//4201 - IP
+//4203 - Gateway
+//4205 - Netmask
+//4208 - Mode 1 = static
+
+//4501 - Reference - 3-Chassis A, 4-Chassis B, 1-Network
+
+//8500 - Select audio spigot 0 indexed
+//8501 - Set mode 1=??? 0=Pass-through 2=mute 3=tone 4=custom
+
+//21000 PTP 0=Freerun, 1=Multicast, 2=Unicast, 3=NTP
+//21046 - Enable PTP on Eth 1
+//21047 - Enable PTP on Eth 2
+//21048 - Enable PTP on Control
+
+//21010 - PTP Domain
+//21013 - PTP Multicast Address
+
+//21074 - PTP Preference 0=Eth1, 1=Eth2, 2=None, 3=Best
+
+//48729 - 2110-31 interop
+//48730 - 2110-31 interop
+//48700 - Extender headers audio
+//48703 - Extender headers meta
+
+//58645 - Packet timing 1=125 increments by 14
+//58644 - channel count increments by 14

@@ -2,11 +2,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
 	log: (callback) => ipcRenderer.on('log', callback),
-	disks: (callback) => ipcRenderer.on('disks', callback),
-	diskLog: (callback) => ipcRenderer.on('diskLog', callback),
-	gatewayTx: message => ipcRenderer.send('gateway', message),
-	doRollTrak: message => ipcRenderer.send('doRollTrak', message),
-	gotFirmware: (callback) => ipcRenderer.on('firmware', callback),
-	getFirmware: message => ipcRenderer.send('firmware', message),
-	progress: (callback) => ipcRenderer.on('progress', callback),
+	receive: (callback) => ipcRenderer.on('receive', callback),
+	request: (command, data) => ipcRenderer.send(command, data),
+	doRollTrak: message => ipcRenderer.send('doRollTrak', message)
+});
+
+contextBridge.exposeInMainWorld('backend', {
+	send: (command, data) => ipcRenderer.send(command, data),
+	on: (command, callback) => ipcRenderer.on(command, (event, data) => callback(data))
 });

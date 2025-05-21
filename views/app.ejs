@@ -10,6 +10,7 @@
             const currentSystem = '<%=systemName%>';
             const version = '<%=version%>';
             const static = '<%=static%>';
+            const commands = <%-JSON.stringify(commands)%>;
             let firmware;
         </script>
         <script type="text/javascript" src="<%-static%>/lib/jquery-3.6.0.min.js"></script>
@@ -23,42 +24,61 @@
                 <img src="../static/img/icon/icon.svg" class="d-inline-block align-top" alt="" width="30" height="30">
                 Demeter
             </a>
-            <div class="m-auto">
-                <button id="showSelect" class="btn btn-secondary">Home</button>
-                <button id="showLogs" class="btn btn-secondary">Logs</button>
-                <button id="showFiles" class="btn btn-secondary">Firmware</button>
+            <div class="d-flex gap-2 m-auto">
+                <button class="btn btn-secondary" id="showSelect">Frames</button>
+                <button class="btn btn-secondary" id="showCommands">Global Cards Config</button>
+                <button class="btn btn-secondary" id="showLogs">Logs</button>
+                <button class="btn btn-primary" id="importExport" data-bs-toggle="modal" data-bs-target="#importPop">Import/Export</button>
             </div>
         </nav>
         <main id="demeterCont" class="overflow-hidden">
-            <section id="diskSelect" class="tab d-flex h-100 overflow-hidden">
-                <div id="disks" class="flex-fill overflow-auto"></div>
-                <div id="cardType" class="overflow-auto">
-                    <div class="cardType" id="chooseGateway">UCP Gateway</div>
-                    <div class="cardType" id="chooseMV">UCP Multiview</div>
-                    <div class="cardType d-none" id="chooseMADI">UCP MADI</div>
+            <section id="addDevices" class="tab h-100 overflow-auto">
+                <div class="p-2 d-flex">
+                    <input class="form-control me-2" id="addFrameIP" type="text" placeholder="Frame IP">
+                    <input class="form-control me-2" id="addFrameNumber" type="text" placeholder="Frame Number">
+                    <input class="form-control me-2" id="addFrameName" type="text" placeholder="Frame Name (optional)">
+                    <select class="form-select me-2" id="addFrameGroup" type="text">
+                        <option value="" selected readonly hidden>Select Group (optional)</option>
+                    </select>
+                    <button class="form-control btn btn-primary" id="addFrameIPBtn">Add</button>
                 </div>
-            </section>
-            <section id="diskConfig" class="h-100 overflow-auto tab d-none">
-                <div id="diskConfigList" class="gap-3 p-3"></div>
-                <div id="configControls">
-                    <button id="makeGateway" class="btn btn-success">Start</button>
-                    <button id="configCancel" class="btn btn-danger">Cancel</button>
-                </div>
-            </section>
-            <section id="diskProgress" class="tab d-none">
+                <article id="framesCont">
 
+                </article>
             </section>
-            <section id="files" class="tab d-none">
-                <div>
-                    <div>Gateway</div>
-                    <div></div>
+            <section id="addGroups" class="tab h-100 overflow-auto">
+                <div class="p-2 d-flex">
+                    <input class="form-control me-2" id="addGroup" type="text" placeholder="Group Name">
+                    <button class="form-control btn btn-primary me-2" id="addGroupBtn">Add</button>
                 </div>
-                <div>
-                    <div>Multiview</div>
-                    <div></div>
-                </div>
+                <article id="groupCont">
+
+                </article>
             </section>
             <section id="logs" class="h-100 overflow-auto tab d-none"></section>
         </main>
+        <article id="importPop" class="modal fade" tabindex="-1">
+            <section class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="w-50">Config Import/Export</h3>
+                    </div>
+                    <div class="p-2">
+                        <h4 class="w-50">Groups</h4>
+                        <div class="d-flex gap-1">
+                            <input class="form-control" id="importGroupsFile" type="file">
+                            <button class="form-control btn btn-primary me-5" id="importGroups">Import</button>
+                            <button class="form-control btn btn-primary" id="exportGroups">Export</button>
+                        </div>
+                        <h4 class="w-50">Frames</h4>
+                        <div class="d-flex gap-1">
+                            <input class="form-control" id="importFramesFile" type="file">
+                            <button class="form-control btn btn-primary me-5" id="importFrames">Import</button>
+                            <button class="form-control btn btn-primary" id="exportFrames">Export</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </article>
     </body>
 </html>
