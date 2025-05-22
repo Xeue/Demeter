@@ -439,22 +439,34 @@ async function checkFrame(frameIP) {
 			let checkNull = false;
 			const [cardIPA, err1] = await getInfo(4101, frameIP, slotHex, address);
 			const [cardIPB, err2] = await getInfo(4201, frameIP, slotHex, address);
-			if (err1 && err2) {
-				Logs.warn('Error resolving IPs of card', [cardIPA, cardIPB]);
-				return resolve();
-			}
-
-			let requestIP = '';
-
 			const [card1UP, err3] = await getInfo(4128, frameIP, slotHex, address);
 			const [card2UP, err4] = await getInfo(4228, frameIP, slotHex, address);
 			const [card1SFP, err5] = await getInfo(4129, frameIP, slotHex, address);
 			const [card2SFP, err6] = await getInfo(4229, frameIP, slotHex, address);
-			if (err3 && err4) {
-				Logs.warn('Failed to get status of card IPs', [card1UP, card2UP]);
+			if (!frame.slots[slot]) frame.slots[slot] = {
+				"enabled": true
+			};
+			frame.slots[slot].ipa = cardIPA == "StringVal" ? null : cardIPA;
+			frame.slots[slot].ipb = cardIPB == "StringVal" ? null : cardIPB;
+			frame.slots[slot].ipaup = err3 ? 'ERROR' : card1UP;
+			frame.slots[slot].ipbup = err4 ? 'ERROR' : card2UP;
+			frame.slots[slot].sfp1 = err5 ? 'ERROR' : card1SFP;
+			frame.slots[slot].sfp2 = err6 ? 'ERROR' : card2SFP;
+			
+			if (err1 && err2) {
+				Logs.warn('Error resolving IPs of card', [cardIPA, cardIPB]);
+				frame.slots[slot].offline = true;
 				return resolve();
 			}
 
+			frame.slots[slot].offline = false;
+
+			// if (err3 && err4) {
+			// 	Logs.warn('Failed to get status of card IPs', [card1UP, card2UP]);
+			// 	// return resolve();
+			// }
+			
+			let requestIP = '';
 			if (card1UP == "UP" && cardIPA !== "StringVal" && cardIPA !== "No rollcall connection") {
 				requestIP = cardIPA;
 				Logs.debug(`Using primary IP: ${cardIPA}`)
@@ -465,15 +477,8 @@ async function checkFrame(frameIP) {
 				Logs.warn(`IPs for slot: ${slot} not found or not online`);
 			}
 
-			if (!frame.slots[slot]) frame.slots[slot] = {};
 			if (frame.slots[slot].active === undefined) frame.slots[slot].active = {}
-			
-			frame.slots[slot].ipa = cardIPA == "StringVal" ? null : cardIPA;
-			frame.slots[slot].ipb = cardIPB == "StringVal" ? null : cardIPB;
-			frame.slots[slot].ipaup = card1UP;
-			frame.slots[slot].ipbup = card2UP;
-			frame.slots[slot].sfp1 = card1SFP;
-			frame.slots[slot].sfp2 = card2SFP;
+		
 
 			if (requestIP) {
 				const [slotInfo, err] = await checkCard(requestIP)
