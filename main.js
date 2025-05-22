@@ -33,7 +33,7 @@ let isQuiting = false;
 let mainWindow = null;
 let jobs = 0;
 let requestSave = false;
-const pollRate = 10;
+const pollRate = 1;
 const saveRate = 5;
 const devEnv = app.isPackaged ? './' : './';
 const __main = path.resolve(__dirname, devEnv);
@@ -164,6 +164,7 @@ async function setUpApp() {
 			frames[data.ip].name = data.name;
 			frames[data.ip].ip = data.ip;
 			frames[data.ip].group = data.group;
+			frames[data.ip].done = true;
 		} else {
 			frames[data.ip] = {
 				"number":data.number,
@@ -171,7 +172,8 @@ async function setUpApp() {
 				"ip": data.ip,
 				"enabled": false,
 				"group": data.group,
-				"slots": {}
+				"slots": {},
+				"done": true
 			};
 		}
 		save();
@@ -335,7 +337,7 @@ async function createWindow() {
 			contextIsolation: true,
 			preload: path.resolve(__main, 'preload.js')
 		},
-		icon: path.join(__static, 'img/icon/icon.png'),
+		icon: path.join(__static, 'img/icon/demeter.ico'),
 		show: false,
 		frame: false,
 		titleBarStyle: 'hidden',
@@ -384,14 +386,19 @@ async function checkFrame(frameIP) {
 	const frame = frames[frameIP]
 	const foundSlots = [];
 
-	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Getting rollcall address of frame', 'offline':frame.offline});
+	frame.done = false;
+
+	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Connecting to frame', 'offline':frame.offline});
 	const [unitAddress, err] = await getInfo(17044, frameIP, '00', '00');
 	if (err) {
 		frame.offline = true;
+		frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Cannot reach frame', 'offline':frame.offline});
+		frame.done = true;
 		save()
 		Logs.warn(unitAddress);
 		return
 	}
+	frame.offline = false;
 	const address = unitAddress.split('= 0x')[1] || '10';
 
 	let command = `rolltrak -a ${frameIP} 0@0000:${address}:10?`;
@@ -407,7 +414,7 @@ async function checkFrame(frameIP) {
 	jobs--
 	const slotsData = parseTrackData(stdout);
 
-	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Checking cards current config', 'offline':frame.offline});
+	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Getting cards current config', 'offline':frame.offline});
 	slotsData.forEach((slotInfo, index) => {
 		const slot = String((1+index).toString(10)).padStart(2, '0')
 		try {
@@ -416,6 +423,7 @@ async function checkFrame(frameIP) {
 				if (frame.slots[slot]) frame.slots[slot].offline = true;
 				return
 			}
+			if (frame.slots[slot]) frame.slots[slot].offline = false;
 			foundSlots.push(slot);
 		} catch (error) {
 			return Logs.warn(`Issue with slot: ${slot} at IP: ${frameIP}`, error);
@@ -440,6 +448,8 @@ async function checkFrame(frameIP) {
 
 			const [card1UP, err3] = await getInfo(4128, frameIP, slotHex, address);
 			const [card2UP, err4] = await getInfo(4228, frameIP, slotHex, address);
+			const [card1SFP, err5] = await getInfo(4129, frameIP, slotHex, address);
+			const [card2SFP, err6] = await getInfo(4229, frameIP, slotHex, address);
 			if (err3 && err4) {
 				Logs.warn('Failed to get status of card IPs', [card1UP, card2UP]);
 				return resolve();
@@ -462,6 +472,8 @@ async function checkFrame(frameIP) {
 			frame.slots[slot].ipb = cardIPB == "StringVal" ? null : cardIPB;
 			frame.slots[slot].ipaup = card1UP;
 			frame.slots[slot].ipbup = card2UP;
+			frame.slots[slot].sfp1 = card1SFP;
+			frame.slots[slot].sfp2 = card2SFP;
 
 			if (requestIP) {
 				const [slotInfo, err] = await checkCard(requestIP)
@@ -561,7 +573,8 @@ async function checkFrame(frameIP) {
 	})
 	await Promise.all(slotsPromises);
 	save();
-	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Retrieved current cards and config', 'offline':frame.offline});
+	frame.done = true;
+	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Done', 'offline':frame.offline});
 }
 
 async function doCommands(rolltrak, cardCommands, takes, requestIP, cardAddress, cardSlot) {
@@ -756,6 +769,7 @@ function startLoops() {
 		Logs.debug("Scanning all frames")
 		for (const frameIP in frames) {
 			if (!Object.prototype.hasOwnProperty.call(frames, frameIP)) return
+			if (!frames[frameIP].done) return
 			checkFrame(frameIP)
 		}
 		Logs.debug(`Current Jobs: ${jobs}`);

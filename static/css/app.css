@@ -293,7 +293,9 @@ label,
    position: fixed;
 }
 
-
+section.data:empty::before {
+   content: "No cards found yet...";
+}
 
 
 

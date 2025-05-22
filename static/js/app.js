@@ -157,8 +157,8 @@ function drawSlotInfo(slotInfo) {
 				<input type="checkbox" class="form-check form-check-input collapseHeader" id="header_${frameIP.replaceAll('.','_')}_${slotName}">
 				<label class="groupName" for="header_${frameIP.replaceAll('.','_')}_${slotName}">Slot ${slotName}</label>
 				<div class="form-switch"><input type="checkbox" class="form-check-input slotEnable" ${slot.enabled ? 'checked' : ''}></div>
-				<div class="cardIface me-2" data-status="${slot.ipaup}">Media 1: ${slot.ipa} - ${slot.ipaup}</div>
-				<div class="cardIface" data-status="${slot.ipbup}">Media 2: ${slot.ipb} - ${slot.ipbup}</div>
+				<div class="cardIface me-2" data-status="${slot.ipaup}">Media 1: ${slot.ipa} - ${slot.ipaup}/${slot.sfp1}</div>
+				<div class="cardIface" data-status="${slot.ipbup}">Media 2: ${slot.ipb} - ${slot.ipbup}/${slot.sfp2}</div>
 				<button class="cardReboot btn btn-secondary btn-sm ms-auto">Reboot</button>
 			</header>`);
 		}
