@@ -269,6 +269,11 @@ label,
 	app-region: no-drag;
 }
 
+#framesCont {
+   display: flex;
+   flex-direction: column;
+}
+
 @font-face {
    font-family: Ubuntu Mono;
    src: url(../fonts/UbuntuMono-R.ttf);

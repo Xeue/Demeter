@@ -418,7 +418,7 @@ async function checkFrame(frameIP) {
 	slotsData.forEach((slotInfo, index) => {
 		const slot = String((1+index).toString(10)).padStart(2, '0')
 		try {
-			if (!slotInfo.includes('IQUCP25_SDI')) {
+			if (!slotInfo.includes('IQUCP25_SDI') && !slotInfo.includes('IQUCP_MADI')) {
 				Logs.info(`Frame: ${frameIP} Slot: ${slot} is not a UCP`);
 				if (frame.slots[slot]) frame.slots[slot].offline = true;
 				return

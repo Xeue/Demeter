@@ -44,6 +44,26 @@ document.addEventListener('DOMContentLoaded', () => {
 			_body.classList.remove('showOffline');
 		}
 	})
+	on('click', '.collapseFrames', () => {
+		const __checks = document.querySelectorAll('.frameCollapse')
+		for (const _check of __checks) {
+			_check.checked = false;
+		}
+	})
+	on('click', '.collapseCards', _element => {
+		const _frameCont = _element.closest('.frameCont');
+		const __checks = _frameCont.querySelectorAll('.cardCollapse')
+		for (const _check of __checks) {
+			_check.checked = false;
+		}
+	})
+	on('click', '.collapseSettings', _element => {
+		const _groupCont = _element.closest('.groupCont');
+		const __checks = _groupCont.querySelectorAll('.groupCollapse')
+		for (const _check of __checks) {
+			_check.checked = false;
+		}
+	})
 
 	/* Frame controls */
 
@@ -114,10 +134,12 @@ function drawFrames(frames) {
 function drawFrame(frame) {
 	const _frameCont = document.createElement('section');
 	_frameCont.classList.add('frameCont');
+	_frameCont.style.order = frame.number;
 	if (frame.offline) _frameCont.classList.add('offline')
 	_frameCont.setAttribute('data-ip', frame.ip);
 	const _header = `<header>
-		<input type="checkbox" class="form-check form-check-input collapseHeader" id="frame_${frame.ip.replaceAll('.','_')}" checked>
+		<button class="btn btn-secondary btn-sm me-2 collapseCards">Collapse All</button>
+		<input type="checkbox" class="form-check form-check-input collapseHeader frameCollapse" id="frame_${frame.ip.replaceAll('.','_')}" checked>
 		<label class="frameName" for="frame_${frame.ip.replaceAll('.','_')}">${frame.ip} - ${frame.number} - ${frame.name} - ${frame.group}</label>
 		<div class="form-switch"><input type="checkbox" class="form-check-input frameEnable" ${frame.enabled ? 'checked' : ''}></div>
 		<div class="frameStatus ms-auto"></div>
@@ -154,7 +176,8 @@ function drawSlotInfo(slotInfo) {
 			if (slot.offline) _slotCont.classList.add('offline');
 			_frameData.appendChild(_slotCont);
 			_slotCont.insertAdjacentHTML('beforeend', `<header>
-				<input type="checkbox" class="form-check form-check-input collapseHeader" id="header_${frameIP.replaceAll('.','_')}_${slotName}">
+				<button class="btn btn-secondary btn-sm me-2 collapseSettings">Collapse All</button>
+				<input type="checkbox" class="form-check form-check-input collapseHeader cardCollapse" id="header_${frameIP.replaceAll('.','_')}_${slotName}">
 				<label class="groupName" for="header_${frameIP.replaceAll('.','_')}_${slotName}">Slot ${slotName}</label>
 				<div class="form-switch"><input type="checkbox" class="form-check-input slotEnable" ${slot.enabled ? 'checked' : ''}></div>
 				<div class="cardIface me-2" data-status="${slot.ipaup}">Media 1: ${slot.ipa} - ${slot.ipaup}/${slot.sfp1}</div>
@@ -179,7 +202,7 @@ function drawSlotInfo(slotInfo) {
 				_groupCont.setAttribute('data-name', group.name);
 				_groupCont.classList.add('groupCont');
 				_groupCont.insertAdjacentHTML('beforeend', `<header>
-						<input type="checkbox" class="form-check form-check-input collapseHeader" id="header_${frameIP.replaceAll('.','_')}_${slotName}_i${index}">
+						<input type="checkbox" class="form-check form-check-input collapseHeader groupCollapse" id="header_${frameIP.replaceAll('.','_')}_${slotName}_i${index}">
 						<label class="groupName" for="header_${frameIP.replaceAll('.','_')}_${slotName}_i${index}">${group.name}</div>
 					</header>`);
 				_slot.append(_groupCont);

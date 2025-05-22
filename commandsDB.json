@@ -92,19 +92,16 @@
                         "2": "Unicast",
                         "0": "Freerun",
                         "3": "NTP"
-                    },
-                    "depends": {"4501":1}
+                    }
                 },{
                     "command": 21010,
                     "name": "PTP Domain",
                     "type": "text",
-                    "default": 127,
-                    "depends": {"4501":1}
+                    "default": 127
                 },{
                     "command": 21013,
                     "name": "PTP Multicast Address",
-                    "type": "smartip",
-                    "depends": {"4501":1, "21000":1}
+                    "type": "smartip"
                 },{
                     "command": 21074,
                     "name": "PTP Preference",
@@ -115,20 +112,17 @@
                         "0":"Ethernet 1",
                         "1":"Ethermet 2",
                         "2":"None"
-                    },
-                    "depends": {"4501":1}
+                    }
                 },{
                     "command": 21046,
                     "name": "Enable PTP on Ethernet 1",
                     "type": "boolean",
-                    "default": 1,
-                    "depends": {"4501":1}
+                    "default": 1
                 },{
                     "command": 21047,
                     "name": "Enable PTP on Ethernet 2",
                     "type": "boolean",
-                    "default": 1,
-                    "depends": {"4501":1}
+                    "default": 1
                 }]
         },{
             "name": "NMOS Settings",
