@@ -134,6 +134,13 @@ const ejs = new electronEjs({
 	'commands': commandsDB
 }, {});
 
+process.on('uncaughtException', error => {
+	Logs.error('Uncaught error', error);
+});
+
+process.on('unhandledRejection', error => {
+	Logs.error('Uncaught error', error);
+});
 
 
 /* Electron */
@@ -235,7 +242,8 @@ async function setUpApp() {
 
 	frontend.on('cardReboot', (event, data) => {
 		const rolltrak = new Shell(Logs, 'CHECK', 'D');
-		let command = `rolltrak -a ${data.frameIP} 4114@0000:10:${data.slot}=1`;
+		const slot = String(data.slot.toString(10)).padStart(2, '0')
+		let command = `rolltrak -a ${data.frameIP} 4114@0000:10:${slot}=1`;
 		Logs.debug(`Rebboting frame: ${data.frameIP}, slot: ${data.slot}`)
 		rolltrak.run(command, false);
 	})
@@ -379,9 +387,6 @@ async function sleep(seconds) {
 
 async function checkFrame(frameIP) {
 	const rolltrak = new Shell(Logs, 'CHECK', 'D');
-	rolltrak.on('stdout', stdout=>{
-		// Logs.info(stdout);
-	})
 
 	const frame = frames[frameIP]
 	const foundSlots = [];
@@ -389,7 +394,7 @@ async function checkFrame(frameIP) {
 	frame.done = false;
 
 	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Connecting to frame', 'offline':frame.offline});
-	const [unitAddress, err] = await getInfo(17044, frameIP, '00', '00');
+	const [unitAddress, err] = await getInfo([17044], frameIP, '00', '00');
 	if (err) {
 		frame.offline = true;
 		frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Cannot reach frame', 'offline':frame.offline});
@@ -401,34 +406,39 @@ async function checkFrame(frameIP) {
 	frame.offline = false;
 	const address = unitAddress.split('= 0x')[1] || '10';
 
-	let command = `rolltrak -a ${frameIP} 0@0000:${address}:10?`;
+	const commands = [];
 		
 	for (let slot = 0; slot < 20; slot++) {
-		command += ` ${16530 + slot}@0000:${address}:00?`;
+		commands.push(16530 + slot)
 	}
 
-	Logs.info(command);
 	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Discovering cards within frame', 'offline':frame.offline});
-	jobs++
-	const {stdout} = await rolltrak.run(command, false);
-	jobs--
-	const slotsData = parseTrackData(stdout);
+	const [slotsData, parseErr] = await getInfo(commands, frameIP, '00', address)
+	if (parseErr) {
+		Logs.warn(`Issue parsing rolltrak data: ${slotsData}`);
+	}
 
 	frontend.send('frameStatus', {'frameIP': frameIP, 'status': 'Getting cards current config', 'offline':frame.offline});
-	slotsData.forEach((slotInfo, index) => {
-		const slot = String((1+index).toString(10)).padStart(2, '0')
+	for (const cmd in slotsData) {
+		const slot = String(Number(cmd)-16529).padStart(2, '0');
 		try {
-			if (!slotInfo.includes('IQUCP25_SDI') && !slotInfo.includes('IQUCP_MADI')) {
+			if (typeof slotsData[cmd] !== "string") {
 				Logs.info(`Frame: ${frameIP} Slot: ${slot} is not a UCP`);
 				if (frame.slots[slot]) frame.slots[slot].offline = true;
-				return
+				continue;
+			}
+			if (!slotsData[cmd].includes('IQUCP25_SDI') && !slotsData[cmd].includes('IQUCP_MADI')) {
+				Logs.info(`Frame: ${frameIP} Slot: ${slot} is not a UCP`);
+				if (frame.slots[slot]) frame.slots[slot].offline = true;
+				continue;
 			}
 			if (frame.slots[slot]) frame.slots[slot].offline = false;
 			foundSlots.push(slot);
 		} catch (error) {
-			return Logs.warn(`Issue with slot: ${slot} at IP: ${frameIP}`, error);
+			Logs.warn(`Issue with slot: ${slot} at IP: ${frameIP}`, error);
+			continue;
 		}
-	});
+	}
 
 	const slotsPromises = [];
 
@@ -437,42 +447,47 @@ async function checkFrame(frameIP) {
 		slotsPromises.push(new Promise(async (resolve, reject) => {
 			const slotHex = Number(slot).toString(16).padStart(2, '0');
 			let checkNull = false;
-			const [cardIPA, err1] = await getInfo(4101, frameIP, slotHex, address);
-			const [cardIPB, err2] = await getInfo(4201, frameIP, slotHex, address);
-			const [card1UP, err3] = await getInfo(4128, frameIP, slotHex, address);
-			const [card2UP, err4] = await getInfo(4228, frameIP, slotHex, address);
-			const [card1SFP, err5] = await getInfo(4129, frameIP, slotHex, address);
-			const [card2SFP, err6] = await getInfo(4229, frameIP, slotHex, address);
+			const [cardInfo, err] = await getInfo([4101, 4103, 4105, 4108, 4128, 4129, 4201, 4203, 4205, 4208, 4228, 4229], frameIP, slotHex, address);
+
+			const cardAIP = cardInfo[4101];
+			const cardAMask = cardInfo[4103];
+			const cardAGate = cardInfo[4105];
+			const cardAMode = cardInfo[4108];
+			const cardAUP = cardInfo[4128];
+			const cardASFP = cardInfo[4129];
+			const cardBIP = cardInfo[4201];
+			const cardBMask = cardInfo[4203];
+			const cardBGate = cardInfo[4205];
+			const cardBMode = cardInfo[4208];
+			const cardBUP = cardInfo[4228];
+			const cardBSFP = cardInfo[4229];
+
 			if (!frame.slots[slot]) frame.slots[slot] = {
 				"enabled": true
 			};
-			frame.slots[slot].ipa = cardIPA == "StringVal" ? null : cardIPA;
-			frame.slots[slot].ipb = cardIPB == "StringVal" ? null : cardIPB;
-			frame.slots[slot].ipaup = err3 ? 'ERROR' : card1UP;
-			frame.slots[slot].ipbup = err4 ? 'ERROR' : card2UP;
-			frame.slots[slot].sfp1 = err5 ? 'ERROR' : card1SFP;
-			frame.slots[slot].sfp2 = err6 ? 'ERROR' : card2SFP;
+
+			frame.slots[slot].ipa = cardAIP == "StringVal" ? null : cardAIP;
+			frame.slots[slot].ipb = cardBIP == "StringVal" ? null : cardBIP;
+			frame.slots[slot].ipaup = cardAUP;
+			frame.slots[slot].ipbup = cardBUP;
+			frame.slots[slot].sfp1 = cardASFP;
+			frame.slots[slot].sfp2 = cardBSFP;
 			
-			if (err1 && err2) {
-				Logs.warn('Error resolving IPs of card', [cardIPA, cardIPB]);
+			if (err) {
+				Logs.warn('Error resolving IPs of card', [cardAIP, cardBIP]);
 				frame.slots[slot].offline = true;
 				return resolve();
 			}
 
 			frame.slots[slot].offline = false;
-
-			// if (err3 && err4) {
-			// 	Logs.warn('Failed to get status of card IPs', [card1UP, card2UP]);
-			// 	// return resolve();
-			// }
 			
 			let requestIP = '';
-			if (card1UP == "UP" && cardIPA !== "StringVal" && cardIPA !== "No rollcall connection") {
-				requestIP = cardIPA;
-				Logs.debug(`Using primary IP: ${cardIPA}`)
-			} else if (card2UP == "UP" && cardIPB !== "StringVal" && cardIPB !== "No rollcall connection") {
-				requestIP = cardIPB;
-				Logs.debug(`Using secondary IP: ${cardIPB}`)
+			if (cardAUP == "UP" && cardAIP !== "StringVal" && cardAIP !== "No rollcall connection") {
+				requestIP = cardAIP;
+				Logs.debug(`Using primary IP: ${cardAIP}`)
+			} else if (cardBUP == "UP" && cardBIP !== "StringVal" && cardBIP !== "No rollcall connection") {
+				requestIP = cardBIP;
+				Logs.debug(`Using secondary IP: ${cardBIP}`)
 			} else {
 				Logs.warn(`IPs for slot: ${slot} not found or not online`);
 			}
@@ -491,19 +506,38 @@ async function checkFrame(frameIP) {
 				}
 			}
 
-			if (frame.slots[slot].active['4101'] == undefined && cardIPA !== "StringVal" && cardIPA !== "No rollcall connection") {
-				frame.slots[slot].active['4101'] = cardIPA
+			if (frame.slots[slot].active['4101'] == undefined && cardAIP !== "StringVal" && cardAIP !== "No rollcall connection") {
+				frame.slots[slot].active['4101'] = cardAIP
+			}
+			if (frame.slots[slot].active['4103'] == undefined && cardAMask !== "StringVal" && cardAMask !== "No rollcall connection") {
+				frame.slots[slot].active['4103'] = cardAMask
+			}
+			if (frame.slots[slot].active['4105'] == undefined && cardAGate !== "StringVal" && cardAGate !== "No rollcall connection") {
+				frame.slots[slot].active['4105'] = cardAGate
+			}
+			if (frame.slots[slot].active['4108'] == undefined && cardAMode !== "StringVal" && cardAMode !== "No rollcall connection") {
+				frame.slots[slot].active['4108'] = cardAMode
 			}
 
-			if (frame.slots[slot].active['4201'] == undefined && cardIPB !== "StringVal" && cardIPB !== "No rollcall connection") {
-				frame.slots[slot].active['4201'] = cardIPB
+
+			if (frame.slots[slot].active['4201'] == undefined && cardBIP !== "StringVal" && cardBIP !== "No rollcall connection") {
+				frame.slots[slot].active['4201'] = cardBIP
+			}
+			if (frame.slots[slot].active['4203'] == undefined && cardBMask !== "StringVal" && cardBMask !== "No rollcall connection") {
+				frame.slots[slot].active['4203'] = cardBMask
+			}
+			if (frame.slots[slot].active['4205'] == undefined && cardBGate !== "StringVal" && cardBGate !== "No rollcall connection") {
+				frame.slots[slot].active['4205'] = cardBGate
+			}
+			if (frame.slots[slot].active['4208'] == undefined && cardBMode !== "StringVal" && cardBMode !== "No rollcall connection") {
+				frame.slots[slot].active['4208'] = cardBMode
 			}
 
 
-			frame.slots[slot].group = computeGroupCommands(frame.group, frame.number, slot);
+			frame.slots[slot].group = computeGroupCommands(frame.group, frame.number, slot, frameIP);
 			if (!frame.slots[slot].prefered) frame.slots[slot].prefered = {}
 
-			Logs.info('Sending slot info to front end');
+			Logs.info(`Sending frame: ${frameIP} slot info to front end`);
 			frontend.send('slotInfo', {
 				"frame": frame,
 				"slots": frame.slots
@@ -570,7 +604,7 @@ async function checkFrame(frameIP) {
 			Logs.debug(`Frame: ${frameIP} Commands that need sending`, frameCommands);
 			
 			doCommands(rolltrak, frameCommands, frameTakes, frameIP, "10", slotHex).then(()=>{
-				if (card1UP == "UP" || card2UP == "UP") doCommands(rolltrak, cardCommands, cardTakes, requestIP, cardAddress, cardSlot);
+				if (cardAUP == "UP" || cardBUP == "UP") doCommands(rolltrak, cardCommands, cardTakes, requestIP, cardAddress, cardSlot);
 			});
 			save();
 			resolve();
@@ -587,13 +621,13 @@ async function doCommands(rolltrak, cardCommands, takes, requestIP, cardAddress,
 	for (const command in cardCommands) {
 		let val = '';
 		switch (cardCommands[command].type) {
-			case 'text':
-			case 'smartip':
-				val = `"${cardCommands[command].value}"`;
-				break;
-			default:
-				val = cardCommands[command].value;
-				break;
+		case 'text':
+		case 'smartip':
+			val = `"${cardCommands[command].value}"`;
+			break;
+		default:
+			val = cardCommands[command].value;
+			break;
 		}
 		commandsArray.push({
 			'command': `${command}@0000:${cardAddress}:${cardSlot}`,
@@ -612,9 +646,9 @@ async function doCommands(rolltrak, cardCommands, takes, requestIP, cardAddress,
 			if (Object.keys(takes).length > 0) {
 				const toTake = Object.keys(takes).map(take => `${take}@0000:${cardAddress}:${cardSlot}=1`).join(' ');
 				Logs.debug(`Running: rolltrak -a ${requestIP} ${toTake}`);
-				// jobs++
-				// await rolltrak.run(`rolltrak -a ${requestIP} ${toTake}`, false);
-				// jobs--
+				jobs++
+				await rolltrak.run(`rolltrak -a ${requestIP} ${toTake}`, false);
+				jobs--
 			}
 		} catch (error) {
 			Logs.error('Error sending changes', error)
@@ -622,7 +656,7 @@ async function doCommands(rolltrak, cardCommands, takes, requestIP, cardAddress,
 	}
 }
 
-function computeGroupCommands(group, frameNumber, slotNumber) {
+function computeGroupCommands(group, frameNumber, slotNumber, frameIP) {
 	frameNumber = Number(frameNumber)
 	slotNumber = Number(slotNumber)
 	const commands = {}
@@ -634,11 +668,21 @@ function computeGroupCommands(group, frameNumber, slotNumber) {
 		const value = command.value.replaceAll('FRAME', frameNumber).replaceAll('SLOT', slotNumber).replaceAll('CARD', Math.floor(slotNumber/2));
 
 		if (command.type == "card") {
-			commands[commandID] = parseCommand(value, command.dataType, command.take)
+			const [cmd, err] = parseCommand(value, command.dataType, command.take)
+			if (err) {
+				frontend.send('frameError', {'frameIP': frameIP, 'message': err});
+			} else {
+				commands[commandID] = cmd
+			}
 		} else {
 			for (let spigot = 0; spigot < 16; spigot++) {
 				const take = Number(command.take)+(Number(command.increment)*spigot);
-				commands[Number(commandID)+(Number(command.increment)*spigot)] = parseCommand(value.replaceAll('SPIGOT', spigot+1), command.dataType, take);
+				const [cmd, err] = parseCommand(value.replaceAll('SPIGOT', spigot+1), command.dataType, take);
+				if (err) {
+					frontend.send('frameError', {'frameIP': frameIP, 'message': err});
+				} else {
+					commands[Number(commandID)+(Number(command.increment)*spigot)] = cmd
+				}
 			}
 		}
 	}
@@ -646,16 +690,25 @@ function computeGroupCommands(group, frameNumber, slotNumber) {
 }
 
 function parseCommand(command, type, take) {
-	switch (type) {
+	try {
+		switch (type) {
 		case 'smartip':
 			const octets = command.split('.');
-			return {"value":octets.map(octet=>eval(octet)).join('.'), "type": type, "enabled": true, "take": take};;
+			return [{
+				"value": octets.map(octet=>{return eval(octet)}).join('.'),
+				"type": type,
+				"enabled": true,
+				"take": take
+			}, false];
 		default:
 			try {
-				return {"value":eval(command), "type": type, "enabled": true, "take": take};
+				return [{"value":eval(command), "type": type, "enabled": true, "take": take}, false];
 			} catch (error) {
-				return {"value":command, "type": type, "enabled": true, "take": take};
+				return [{"value":command, "type": type, "enabled": true, "take": take}, false];
 			}
+		}
+	} catch (error) {
+		return [error, true]
 	}
 }
 
@@ -718,25 +771,27 @@ async function checkCard(cardIP) {
 async function getInfo(commandID, frameIP, slot, address = '10') {
 	jobs++
 	try {
+		if (!Array.isArray(commandID)) {
+			commandID = [commandID]
+		}
+		const commandString = commandID.map(command => `${command}@0000:${address}:${slot}?`).join(' ');
 		const rolltrak = new Shell(Logs, 'DDS', 'D');
-		Logs.info(`rolltrak -a ${frameIP} ${commandID}@0000:${address}:${slot}?`);
-		const output = await rolltrak.run(`rolltrak -a ${frameIP} ${commandID}@0000:${address}:${slot}?`, false); // Get's I/O arrangement
+		Logs.info(`rolltrak -a ${frameIP} ${commandString}`);
+		const output = await rolltrak.run(`rolltrak -a ${frameIP} ${commandString}`, false);
 		const {stdout, stderr} = output;
-		let outArr;
-		try {
-			outArr = stdout[0].split('\r\n');
-		} catch (error) {
-			jobs--
-			return [`Frame: ${frameIP}, Slot: ${slot}, Failed to parse rollcall data`, true];
-		}
-		const checkOut = outArr.length > 1 ? 1 : 0;
-		const returnString = outArr[checkOut];
-		if (returnString.includes('No rollcall connection')) {
-			jobs--
-			return [`Frame: ${frameIP}, Slot: ${slot}, No rollcall connection`, true];
-		}
+		const [rows, err] = parseTrackData(stdout)
 		jobs--
-		return [returnString.split('\t')[7], false];
+		if (err) {
+			return [rows, err]
+		}
+		switch (Object.keys(rows).length) {
+		case 0:
+			return [rows, true];
+		case 1:
+			return [Object.values(rows)[0], false];
+		default:
+			return [rows, false];
+		}
 	} catch (error) {
 		Logs.warn(`Frame: ${frameIP}, Slot: ${slot}, General error connecting`, error);
 		jobs--
@@ -748,17 +803,25 @@ function parseTrackData(rows) {
 	try {
 		if (rows[0].includes('No rollcall connection')) {
 			Logs.warn('Rollcall connection timeout');
-			return [];
+			return [[],true];
 		}
-		if (rows.length < 2) {
+		if (rows.length < 1) {
 			Logs.warn('Not enough rows returned');
-			return [];
+			return [[],true];
 		}
-		rows.shift();
-		return rows.map(row => row.split('\t')[7])
+		rows[0] = rows[0].split('\r')[1]
+		// rows.shift();
+		const out = {}
+		rows.forEach(row=>{
+			const split = row.split('\t');
+			let val = split[7];
+			if (split[6] !== "") val = Number(split[6]);
+			out[split[5]] = val;
+		})
+		return [out, false]
 	} catch (error) {
 		Logs.warn('Issue parsing data', error);
-		return [];
+		return [[], true];
 	}
 }
 

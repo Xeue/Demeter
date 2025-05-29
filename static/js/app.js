@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	backend.on('slotInfo', drawSlotInfo);
 	backend.on('frameStatus', doFrameStatus);
 	backend.on('groups', drawGroups);
+	backend.on('frameError', doFrameError);
 
 	on('click', '#showLogs', ()=>showTab('logs'));
 	on('click', '#showSelect', ()=>showTab('addDevices'));
@@ -140,8 +141,9 @@ function drawFrame(frame) {
 	const _header = `<header>
 		<button class="btn btn-secondary btn-sm me-2 collapseCards">Collapse All</button>
 		<input type="checkbox" class="form-check form-check-input collapseHeader frameCollapse" id="frame_${frame.ip.replaceAll('.','_')}" checked>
-		<label class="frameName" for="frame_${frame.ip.replaceAll('.','_')}">${frame.ip} - ${frame.number} - ${frame.name} - ${frame.group}</label>
+		<label class="frameName" for="frame_${frame.ip.replaceAll('.','_')}">${frame.ip} - F${frame.number}-${frame.name} - ${frame.group}</label>
 		<div class="form-switch"><input type="checkbox" class="form-check-input frameEnable" ${frame.enabled ? 'checked' : ''}></div>
+		<div class="frameError ms-auto"></div>
 		<div class="frameStatus ms-auto"></div>
 		<button class="frameDelete btn btn-danger btn-sm ms-2">Delete</button>
 	</header>`
@@ -180,10 +182,13 @@ function drawSlotInfo(slotInfo) {
 				<input type="checkbox" class="form-check form-check-input collapseHeader cardCollapse" id="header_${frameIP.replaceAll('.','_')}_${slotName}">
 				<label class="groupName" for="header_${frameIP.replaceAll('.','_')}_${slotName}">Slot ${slotName}</label>
 				<div class="form-switch"><input type="checkbox" class="form-check-input slotEnable" ${slot.enabled ? 'checked' : ''}></div>
-				<div class="cardIface me-2" data-status="${slot.ipaup}">Media 1: ${slot.ipa} - ${slot.ipaup}/${slot.sfp1}</div>
-				<div class="cardIface" data-status="${slot.ipbup}">Media 2: ${slot.ipb} - ${slot.ipbup}/${slot.sfp2}</div>
+				<div class="cardIface card1Iface me-2" data-status="${slot.ipaup}">Media 1: ${slot.ipa} - ${slot.ipaup}/${slot.sfp1}</div>
+				<div class="cardIface card2Iface" data-status="${slot.ipbup}">Media 2: ${slot.ipb} - ${slot.ipbup}/${slot.sfp2}</div>
 				<button class="cardReboot btn btn-secondary btn-sm ms-auto">Reboot</button>
 			</header>`);
+		} else {
+			_slotCont.querySelector('.card1Iface').innerHTML = `Media 1: ${slot.ipa} - ${slot.ipaup}/${slot.sfp1}`;
+			_slotCont.querySelector('.card2Iface').innerHTML = `Media 2: ${slot.ipb} - ${slot.ipbup}/${slot.sfp2}`;
 		}
 		
 		let _slot = _slotCont.querySelector(`.collapseSection`);
@@ -315,6 +320,18 @@ function doFrameStatus(data) {
 			_frame.classList.remove('offline');
 		}
 		_status.innerHTML = data.status;
+	} catch (error) {
+		console.log(error)
+	}
+}
+
+
+function doFrameError(data) {
+	try {
+		const _framesCont = document.getElementById('framesCont');
+		const _frame = _framesCont.querySelector(`[data-ip="${data.frameIP}"]`);
+		const _status = _frame.querySelector('.frameError');
+		_status.innerHTML = data.error;
 	} catch (error) {
 		console.log(error)
 	}
