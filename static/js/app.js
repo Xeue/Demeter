@@ -187,8 +187,12 @@ function drawSlotInfo(slotInfo) {
 				<button class="cardReboot btn btn-secondary btn-sm ms-auto">Reboot</button>
 			</header>`);
 		} else {
-			_slotCont.querySelector('.card1Iface').innerHTML = `Media 1: ${slot.ipa} - ${slot.ipaup}/${slot.sfp1}`;
-			_slotCont.querySelector('.card2Iface').innerHTML = `Media 2: ${slot.ipb} - ${slot.ipbup}/${slot.sfp2}`;
+			const _iface1 = _slotCont.querySelector('.card1Iface')
+			_iface1.innerHTML = `Media 1: ${slot.ipa} - ${slot.ipaup}/${slot.sfp1}`;
+			_iface1.setAttribute('data-status', slot.ipaup)
+			const _iface2 = _slotCont.querySelector('.card2Iface')
+			_iface2.innerHTML = `Media 2: ${slot.ipb} - ${slot.ipbup}/${slot.sfp2}`;
+			_iface2.setAttribute('data-status', slot.ipbup)
 		}
 		
 		let _slot = _slotCont.querySelector(`.collapseSection`);
@@ -760,6 +764,7 @@ function doInput(_element) {
 	const slot = _element.closest('.slotCont').getAttribute('data-slot');
 	const frame = _element.closest('.frameCont').getAttribute('data-ip');
 	const enabled = _element.closest('.commandCont').querySelector('.commandEnabled').checked;
+	const dataType = _element.closest('.commandCont').getAttribute('data-type');
 
 	backend.send('setCommand', {
 		"ip":frame,
@@ -767,7 +772,8 @@ function doInput(_element) {
 		"command": command,
 		"value": _element.value,
 		"enabled": enabled,
-		"take": take
+		"take": take,
+		"dataType": dataType
 	});
 }
 
@@ -777,6 +783,7 @@ function doCheck(_element) {
 	const slot = _element.closest('.slotCont').getAttribute('data-slot');
 	const frame = _element.closest('.frameCont').getAttribute('data-ip');
 	const enabled = _element.closest('.commandCont').querySelector('.commandEnabled').checked;
+	const dataType = _element.closest('.commandCont').getAttribute('data-type');
 
 	backend.send('setCommand', {
 		"ip":frame,
@@ -784,7 +791,8 @@ function doCheck(_element) {
 		"command": command,
 		"value": _element.checked ? '1' : '0',
 		"enabled": enabled,
-		"take": take
+		"take": take,
+		"dataType": dataType
 	});
 }
 
@@ -795,6 +803,7 @@ function doOctet(_element) {
 	const frame = _element.closest('.frameCont').getAttribute('data-ip');
 	const __octets = _element.parentElement.querySelectorAll('.octet');
 	const enabled = _element.closest('.commandCont').querySelector('.commandEnabled').checked;
+	const dataType = _element.closest('.commandCont').getAttribute('data-type');
 	const ip = [];
 	for (const _octet of __octets) {
 		ip.push(_octet.value)
@@ -806,7 +815,8 @@ function doOctet(_element) {
 		"command": command,
 		"value": ip.join('.'),
 		"enabled": enabled,
-		"take": take
+		"take": take,
+		"dataType": dataType
 	});
 }
 
@@ -814,12 +824,16 @@ function doEnable(_element) {
 	const command = _element.closest('.commandCont').getAttribute('data-command');
 	const slot = _element.closest('.slotCont').getAttribute('data-slot');
 	const frame = _element.closest('.frameCont').getAttribute('data-ip');
+	const dataType = _element.closest('.commandCont').getAttribute('data-type');
+	const take = _element.closest('.commandCont').getAttribute('data-take');
 
 	backend.send('setEnable', {
 		"ip":frame,
 		"slot": slot,
 		"command": command,
-		"enabled": _element.checked
+		"enabled": _element.checked,
+		"dataType": dataType,
+		"take": take
 	});
 }
 
@@ -855,7 +869,7 @@ function doFrameDelete(_element) {
 /* Handle group inputs */
 
 function doGroupInput(_element) {
-	if (_element.classList.contains('commandCheck')) return
+	if (_element.classList.contains('group_commandCheck')) return
 	const command = _element.closest('.commandCont').getAttribute('data-command');
 	const group = _element.closest('.groupCommandCont').getAttribute('data-name');
 	const type = _element.closest('.groupCont').getAttribute('data-type');

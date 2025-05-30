@@ -374,8 +374,11 @@ header:has(.collapseHeader:checked) + .collapseSection {
 .form-switch:has(.commandEnabled:not(:checked)) ~.commandInput {
    color: dimgrey;
    opacity: 0.5;
-   /* cursor: not-allowed;
-   pointer-events: none; */
+}
+
+.form-switch:has(.commandEnabled:checked) ~.commandComputed {
+   color: dimgrey;
+   opacity: 0.5;
 }
 
 .collapseHeader {
