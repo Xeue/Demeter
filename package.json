@@ -1,8 +1,8 @@
 {
   "name": "demeter",
-  "version": "1.3.9",
+  "version": "1.4.0",
   "description": "UCP Blaster 3000",
-  "main": "main.js",
+  "main": "main.ts",
   "dependencies": {
     "auto-launch": "^5.0.6",
     "ejs": "^3.1.10",
@@ -10,7 +10,7 @@
     "json5": "^2.2.3",
     "mica-electron": "^1.5.16",
     "temp": "^0.9.4",
-    "xeue-config": "^2.2.8",
+    "xeue-config": "^3.0.1",
     "xeue-logs": "^2.3.6",
     "xeue-shell": "^1.4.2"
   },
@@ -47,7 +47,8 @@
   "author": "Sam Chilton",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^35.2.0",
-    "electron-builder": "^26.0.12"
+    "electron": "^36.3.2",
+    "electron-builder": "^26.0.12",
+    "tsx": "^4.19.4"
   }
 }
