@@ -172,6 +172,7 @@ async function setUpApp() {
 			frames[data.ip].ip = data.ip;
 			frames[data.ip].group = data.group;
 			frames[data.ip].done = true;
+			frames[data.ip].type = data.type;
 		} else {
 			frames[data.ip] = {
 				"number":data.number,
@@ -180,7 +181,8 @@ async function setUpApp() {
 				"enabled": false,
 				"group": data.group,
 				"slots": {},
-				"done": true
+				"done": true,
+				"type": data.type
 			};
 		}
 		save();
@@ -245,9 +247,9 @@ async function setUpApp() {
 
 	frontend.on('cardReboot', (event, data) => {
 		const rolltrak = new Shell(Logs, 'CHECK', 'D');
-		const slot = String(data.slot.toString(10)).padStart(2, '0')
+		const slot = String(Number(data.slot).toString(16)).padStart(2, '0')
 		let command = `rolltrak -a ${data.frameIP} 4114@0000:10:${slot}=1`;
-		Logs.debug(`Rebboting frame: ${data.frameIP}, slot: ${data.slot}`)
+		Logs.debug(`Rebboting frame: ${data.frameIP}, slot: ${data.slot}, command: ${command}`);
 		rolltrak.run(command, false);
 	})
 
