@@ -12,7 +12,8 @@
     "temp": "^0.9.4",
     "xeue-config": "^3.0.1",
     "xeue-logs": "^2.3.6",
-    "xeue-shell": "^1.4.2"
+    "xeue-shell": "^1.4.2",
+    "tsx": "^4.19.4"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -48,7 +49,7 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "^36.3.2",
-    "electron-builder": "^26.0.12",
-    "tsx": "^4.19.4"
-  }
+    "electron-builder": "^26.0.12"
+  },
+  "type": "module"
 }

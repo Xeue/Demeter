@@ -10,10 +10,17 @@ import electronEjs from 'electron-ejs';
 import { MicaBrowserWindow, IS_WINDOWS_11 } from 'mica-electron';
 import JSON5 from 'json5';
 import fs from 'fs';
+import unhandled from 'electron-unhandled';
+
+unhandled();
 
 const background = IS_WINDOWS_11 ? 'micaActive' : 'bg-dark';
 
-const __static = __dirname+'/static';
+const __internal = import.meta.dirname;
+const __data = path.join(app.getPath("documents"), 'DemeterData');
+const __static = `${app.isPackaged ? process.resourcesPath : __internal}/static`;
+// const __views = `${app.isPackaged ? process.resourcesPath : __internal}/views`;
+
 
 /* Data Defines */
 
@@ -130,9 +137,6 @@ let jobs = 0;
 let requestSave = false;
 const pollRate = 1;
 const saveRate = 5;
-const devEnv = app.isPackaged ? './' : './';
-const __main = path.resolve(__dirname, devEnv);
-const __data = path.join(app.getPath('documents'), 'DemeterData');
 const frameCommandsList = [4108, 4101, 4103, 4105, 4208, 4201, 4203, 4205]
 
 const Logs = new _Logs(
@@ -146,7 +150,7 @@ const config = new Config(
 	Logs
 );
 
-const commandsJSON = fs.readFileSync(path.join(__main, 'commandsDB.json'));
+const commandsJSON = fs.readFileSync(path.join(__internal, 'commandsDB.json'));
 const commandsDB:GroupsDB = JSON5.parse(commandsJSON.toString());
 
 let frames:Frames = loadData('frames');
@@ -343,10 +347,14 @@ async function setUpApp() {
 		save();
 	})
 
-	frontend.on('cardReboot', (event, data) => {
+	frontend.on('cardReboot', async (event, data) => {
 		const rolltrak = new Shell(Logs, 'CHECK', 'D');
 		const slot = String(Number(data.slot).toString(16)).padStart(2, '0')
-		let command = `rolltrak -a ${data.frameIP} 4114@0000:10:${slot}=1`;
+		const [address, err] = await getFrameAddress(data.frameIP);
+		if (err) {
+			Logs.warn(`Failed to reboot frame: ${data.frameIP}`, err);
+		}
+		let command = `rolltrak -a ${data.frameIP} 4114@0000:${address}:${slot}=1`;
 		Logs.debug(`Rebboting frame: ${data.frameIP}, slot: ${data.slot}, command: ${command}`);
 		rolltrak.run(command, false);
 	})
@@ -437,7 +445,7 @@ async function createWindow() {
 		autoHideMenuBar: true,
 		webPreferences: {
 			contextIsolation: true,
-			preload: path.resolve(__main, 'preload.js')
+			preload: path.resolve(__internal, 'preload.js')
 		},
 		icon: path.join(__static, 'img/icon/demeter.ico'),
 		show: false,
@@ -470,11 +478,25 @@ async function createWindow() {
 		Logs.warn("Exiting");
 	});
 
-	mainWindow.loadURL(path.resolve(__main, 'views/app.ejs'));
+	mainWindow.loadURL(path.resolve(__internal, 'views/app.ejs'));
 }
 
 async function sleep(seconds: number) {
 	await new Promise (resolve => setTimeout(resolve, 1000*seconds));
+}
+
+async function getFrameAddress(frameIP: string) {
+	const [unitAddresses, err] = await getInfo([17044, 16482], frameIP, '00', '00');
+	if (err) {
+		return ['10', err];
+	}
+	if (unitAddresses[17044] !== 'Not In Use') {
+		return [unitAddresses[17044].split('= 0x')[1] || '10', false];
+	} else if (unitAddresses[16482].includes(':')) {
+		return [unitAddresses[16482].split(':')[1] || '01', false];
+	} else {
+		return ['10', 'failed to get unit address'];
+	}
 }
 
 async function checkFrame(frameIP: string) {
@@ -487,8 +509,8 @@ async function checkFrame(frameIP: string) {
 	frame.done = false;
 
 	frontendSend('frameStatus', {'frameIP': frameIP, 'status': 'Connecting to frame', 'offline':frame.offline});
-	const [unitAddress, err] = await getInfo([17044], frameIP, '00', '00');
-	if (err) {
+	const [address, err] = await getFrameAddress(frameIP);
+	if (err) {		
 		frame.offline = true;
 		frontendSend('frameStatus', {'frameIP': frameIP, 'status': 'Cannot reach frame', 'offline':frame.offline});
 		frame.done = true;
@@ -496,8 +518,8 @@ async function checkFrame(frameIP: string) {
 		Logs.warn(`Frame: ${frameIP} failed to get unit address, so probably not online`, err);
 		return
 	}
+	
 	frame.offline = false;
-	const address = unitAddress.split('= 0x')[1] || '10';
 
 	const commands:number[] = [];
 		
@@ -506,7 +528,8 @@ async function checkFrame(frameIP: string) {
 	}
 
 	frontendSend('frameStatus', {'frameIP': frameIP, 'status': 'Discovering cards within frame', 'offline':frame.offline});
-	const [slotsData, parseErr] = await getInfo(commands, frameIP, '00', address)
+	const [slotsData, parseErr] = await getInfo(commands, frameIP, '00', address);
+
 	if (parseErr) {
 		Logs.warn(`Issue parsing rolltrak data`, parseErr);
 	}
@@ -700,7 +723,7 @@ async function checkFrame(frameIP: string) {
 			if (!frame.enabled || !frame.slots[slot].enabled) return resolve();
 			Logs.debug(`Frame: ${frameIP} Commands that need sending`, frameCommands);
 			
-			doCommands(rolltrak, frameCommands, frameTakes, frameIP, "10", slotHex).then(()=>{
+			doCommands(rolltrak, frameCommands, frameTakes, frameIP, address, slotHex).then(()=>{
 				if (cardAUP == "UP" || cardBUP == "UP") doCommands(rolltrak, cardCommands, cardTakes, requestIP, cardAddress, cardSlot);
 			});
 			save();
@@ -738,7 +761,7 @@ async function doCommands(rolltrak: Shell, cardCommands:{[key: string]: Command}
 	}
 
 	if (commandsArray.length > 0) {
-		Logs.log('Changes required, pushing')
+		Logs.log(`Frame: ${requestIP} Changes required, pushing`);
 		try {
 			const toRun = commandsArray.map(command => `${command.command}=${command.value}`).join(' ');
 			Logs.debug(`Running: rolltrak -a ${requestIP} ${toRun}`);
