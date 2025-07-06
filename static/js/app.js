@@ -11,9 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	backend.on('groups', drawGroups);
 	backend.on('frameError', doFrameError);
 
-	on('click', '#showLogs', ()=>showTab('logs'));
-	on('click', '#showSelect', ()=>showTab('addDevices'));
-	on('click', '#showCommands', ()=>showTab('addGroups'));
+	on('click', '.tabSelect', showTab)
 	on('click', '#addFrameIPBtn', addFrame);
 	on('click', '#addGroupBtn', addGroup);
 
@@ -74,8 +72,10 @@ document.addEventListener('DOMContentLoaded', () => {
 	on('click', '.frame_commandEnabled', (_element)=>doEnable(_element));
 	on('click', '.slotEnable', (_element)=>doSlotEnable(_element));
 	on('click', '.frameEnable', (_element)=>doFrameEnable(_element));
+	on('click', '.frameScan', (_element)=>doFrameScan(_element));
 	on('click', '.frameDelete', (_element) => doFrameDelete(_element));
 	on('click', '.groupDelete', (_element) => doGroupDelete(_element));
+	on('click', '.frameScanMode', (_element) => doFrameMode(_element));
 
 	/* Group controls */
 
@@ -138,14 +138,33 @@ function drawFrame(frame) {
 	_frameCont.style.order = frame.number;
 	if (frame.offline) _frameCont.classList.add('offline')
 	_frameCont.setAttribute('data-ip', frame.ip);
+	let options = ""
+	if (frame.enabled) {
+		options = `<option value="ignore">Ignore</option>
+			<option value="scan">Scan Only</option>
+			<option value="blast" selected>Scan & Blast</option>`
+	} else if (frame.scan) {
+		options = `<option value="ignore">Ignore</option>
+			<option value="scan" selected>Scan Only</option>
+			<option value="blast">Scan & Blast</option>`
+	} else {
+		options = `<option value="ignore" selected>Ignore</option>
+			<option value="scan">Scan Only</option>
+			<option value="blast">Scan & Blast</option>`
+	}
 	const _header = `<header>
 		<button class="btn btn-secondary btn-sm me-2 collapseCards">Collapse All</button>
-		<input type="checkbox" class="form-check form-check-input collapseHeader frameCollapse" id="frame_${frame.ip.replaceAll('.','_')}" checked>
-		<label class="frameName" for="frame_${frame.ip.replaceAll('.','_')}">${frame.ip} - F${frame.number}-${frame.name} - ${frame.group}</label>
-		<div class="form-switch"><input type="checkbox" class="form-check-input frameEnable" ${frame.enabled ? 'checked' : ''}></div>
+		<input type="checkbox" class="form-check form-check-input collapseHeader frameCollapse" id="frame_${frame.ip.replaceAll('.','_')}">
+		<label class="frameName" for="frame_${frame.ip.replaceAll('.','_')}">F${frame.number}-${frame.name} - ${frame.ip}<span class="labelGroup">${frame.group}</span></label>
+		<div class="form-switch"><input type="checkbox" class="form-check-input frameEnable d-none" ${frame.enabled ? 'checked' : ''}></div>
+		<div class="d-none">Scan</div>
+		<div class="form-switch"><input type="checkbox" class="form-check-input frameScan d-none" ${frame.scan ? 'checked' : ''}></div>
 		<div class="frameError ms-auto"></div>
 		<div class="frameStatus ms-auto"></div>
-		<button class="frameDelete btn btn-danger btn-sm ms-2">Delete</button>
+		<select class="frameScanMode form-select form-select-sm w-auto ms-1">
+			${options}
+		</select>
+		<button class="frameDelete btn btn-danger btn-sm ms-1">Delete</button>
 	</header>`
 	_frameCont.insertAdjacentHTML('beforeend', _header);
 	_frameCont.insertAdjacentHTML('beforeend', `<section class="data collapseSection"></div>`);
@@ -181,10 +200,14 @@ function drawSlotInfo(slotInfo) {
 				<button class="btn btn-secondary btn-sm me-2 collapseSettings">Collapse All</button>
 				<input type="checkbox" class="form-check form-check-input collapseHeader cardCollapse" id="header_${frameIP.replaceAll('.','_')}_${slotName}">
 				<label class="groupName" for="header_${frameIP.replaceAll('.','_')}_${slotName}">Slot ${slotName}</label>
-				<div class="form-switch"><input type="checkbox" class="form-check-input slotEnable" ${slot.enabled ? 'checked' : ''}></div>
 				<div class="cardIface card1Iface me-2" data-status="${slot.ipaup}">Media 1: ${slot.ipa} - ${slot.ipaup}/${slot.sfp1}</div>
-				<div class="cardIface card2Iface" data-status="${slot.ipbup}">Media 2: ${slot.ipb} - ${slot.ipbup}/${slot.sfp2}</div>
-				<button class="cardReboot btn btn-secondary btn-sm ms-auto">Reboot</button>
+				<div class="cardIface card2Iface me-auto" data-status="${slot.ipbup}">Media 2: ${slot.ipb} - ${slot.ipbup}/${slot.sfp2}</div>
+				<div class="blastLabel d-flex">Blast
+					<div class="form-switch">
+						<input type="checkbox" class="form-check-input slotEnable" ${slot.enabled ? 'checked' : ''}>
+					</div>
+				</div>
+				<button class="cardReboot btn btn-secondary btn-sm">Reboot</button>
 			</header>`);
 		} else {
 			const _iface1 = _slotCont.querySelector('.card1Iface')
@@ -224,7 +247,7 @@ function drawSlotInfo(slotInfo) {
 				_groupCont.append(_collapseSection);
 			}
 			
-			group.commands.forEach(command => {
+			group.commands?.forEach(command => {
 				let _command = _collapseSection.querySelector(`[data-command="${command.command}"]`)
 				try {					
 					const prefered = slot.prefered[command.command];
@@ -246,7 +269,11 @@ function drawSlotInfo(slotInfo) {
 			_slot.insertAdjacentHTML('beforeend', `<h4 class="m-1">Spigots</h2>`);
 		}
 		
-		for (let spigot = 0; spigot < slot.ins; spigot++) {
+		for (let spigot = 0; spigot < 16; spigot++) {
+
+			const isInput = slot.ins > spigot;
+			const direction = isInput ? "IN" : "OUT";
+
 			let _spigotCont = _slot.querySelector(`[data-spigot="${spigot}"]`);
 			if (!_spigotCont) {
 				_spigotCont = document.createElement('section');
@@ -257,7 +284,7 @@ function drawSlotInfo(slotInfo) {
 	
 				_spigotCont.insertAdjacentHTML('beforeend', `<header>
 					<input type="checkbox" class="form-check form-check-input collapseHeader" id="header_spig_${frameIP.replaceAll('.','_')}_${slotName}_s${spigot}">
-					<label class="groupName" for="header_spig_${frameIP.replaceAll('.','_')}_${slotName}_s${spigot}">Spigot ${spigot+1} Settings</div>
+					<label class="groupName" for="header_spig_${frameIP.replaceAll('.','_')}_${slotName}_s${spigot}">${direction} Spigot ${spigot+1} Settings</div>
 					</header>`)
 			}
 
@@ -289,20 +316,23 @@ function drawSlotInfo(slotInfo) {
 				}
 
 
-				group.commands.forEach(command => {
-					const commandID = Number(command.command) + Number(command.increment * spigot)
-					const _command = _collapseSection.querySelector(`[data-command="${commandID}"]`)
-					try {						
-						const prefered = slot.prefered[commandID];
-						const active = slot.active[commandID];
-						const group = slot.group[commandID] ? slot.group[commandID].value : null;
-						if (!_command) {
-							_collapseSection.append(drawCommand('frame', command, commandID, prefered, active, group));
-						} else {
-							updateCommand(_command, command, prefered, active, group);
+				group.commands?.forEach(command => {
+					if ((command.inOnly && isInput) || !command.inOnly) {
+						const commandID = Number(command.command) + Number(command.increment * spigot)
+						const _command = _collapseSection.querySelector(`[data-command="${commandID}"]`)
+						try {						
+							// if (commandID == 50265) console.log([commandID, slot.group[commandID]])
+							const prefered = slot.prefered[commandID];
+							const active = slot.active[commandID];
+							const group = slot.group[commandID] ? slot.group[commandID].value : null;
+							if (!_command) {
+								_collapseSection.append(drawCommand('frame', command, commandID, prefered, active, group));
+							} else {
+								updateCommand(_command, command, prefered, active, group);
+							}
+						} catch (error) {
+							console.log(error)
 						}
-					} catch (error) {
-						console.log(error)
 					}
 				})
 
@@ -397,8 +427,6 @@ function drawCommand(prefix, command, commandID, editValue = null, readValue = n
 					break;
 				case 'select':
 					val = command.options[computed];
-					break;
-				default:
 					break;
 			}
 			_cont.insertAdjacentHTML('beforeend', `<div class="commandComputed form-control form-control-sm w-75">${val}</div>`);
@@ -647,12 +675,23 @@ function drawGroup(group) {
 
 /* GUI */
 
-function showTab(tab = 'addDevices') {
+function showTab(_element) {
+	const __tabSelects = document.getElementsByClassName('tabSelect');
+	for (const _tab of __tabSelects) {
+		_tab.classList.remove('active');
+	}
+	_element.classList.add('active');
+
+	const tab = _element.getAttribute('data-tab');
 	const __tabs = document.getElementsByClassName('tab');
 	for (const _tab of __tabs) {
-		_tab.classList.add('d-none');
+		if (_tab.getAttribute('data-tab') == tab) {
+			_tab.classList.remove('d-none');
+		} else {
+			_tab.classList.add('d-none');
+		}
 	}
-	document.getElementById(tab).classList.remove('d-none');
+	__tabs.querySelector(`[data-tab="${tab}"]`).classList.remove('d-none');
 }
 
 function doLog(log) {
@@ -856,6 +895,54 @@ function doFrameEnable(_element) {
 		"enabled": _element.checked
 	});
 }
+
+function doFrameScan(_element) {
+	const frame = _element.closest('.frameCont').getAttribute('data-ip');
+
+	backend.send('scanFrame', {
+		"ip":frame,
+		"scan": _element.checked
+	});
+}
+
+function doFrameMode(_element) {
+	const frame = _element.closest('.frameCont').getAttribute('data-ip');
+	switch (_element.value) {
+		case "scan":
+			backend.send('scanFrame', {
+				"ip":frame,
+				"scan": true
+			});
+			backend.send('enableFrame', {
+				"ip":frame,
+				"enabled": false
+			});
+			break;
+		case "blast":
+			backend.send('scanFrame', {
+				"ip":frame,
+				"scan": true
+			});
+			backend.send('enableFrame', {
+				"ip":frame,
+				"enabled": true
+			});
+			break;
+		case "ignore":
+			backend.send('scanFrame', {
+				"ip":frame,
+				"scan": false
+			});
+			backend.send('enableFrame', {
+				"ip":frame,
+				"enabled": false
+			});
+			break;
+		default:
+			break;
+	}
+}
+
 
 function doFrameDelete(_element) {
 	const _frame = _element.closest('.frameCont');

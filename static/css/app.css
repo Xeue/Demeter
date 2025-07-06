@@ -30,6 +30,38 @@ label:has(:checked) {
    background: #2e303a;
 }
 
+label.blastLabel {
+   background: none !important;
+   border: none !important;
+   margin: 0;
+   padding: 0;
+   gap: 0.4rem;
+}
+
+.labelGroup {
+   background: #0049c1;
+   border-radius: 5px;
+   padding: 0.1rem 0.3rem;
+   margin-left: 0.4rem;
+}
+
+.blastLabel {
+   opacity: 0.5;
+   cursor: not-allowed;
+   gap: 0.4rem;
+   & *{
+      pointer-events: none;
+   }
+}
+
+.frameCont:has(.frameScanMode option[value="blast"]:checked) .blastLabel {
+   opacity: 1;
+   cursor: pointer;
+   & *{
+      pointer-events: all;
+   }
+}
+
 .log {
    color: #fff;
    white-space: break-spaces
@@ -265,7 +297,8 @@ body.micaActive {
 input,
 label,
 #showSelect,
-.btn {
+.btn,
+.nav-link {
 	app-region: no-drag;
 }
 
