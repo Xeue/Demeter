@@ -1,8 +1,8 @@
 {
   "name": "demeter",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "UCP Blaster 3000",
-  "main": "main.ts",
+  "main": "main.js",
   "dependencies": {
     "auto-launch": "^5.0.6",
     "ejs": "^3.1.10",
@@ -12,11 +12,11 @@
     "temp": "^0.9.4",
     "xeue-config": "^3.0.1",
     "xeue-logs": "^2.3.6",
-    "xeue-shell": "^1.4.2",
-    "tsx": "^4.19.4"
+    "xeue-shell": "^1.4.2"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "compile": "tsc --allowJS -t es6 main.ts",
     "start": "electron --js-flags=\"--max_old_space_size=4096\" .",
     "build": "electron-builder --win"
   },
@@ -26,30 +26,41 @@
     "files": [
       "**/*",
       "static/*",
-      "lib/*"
+      "lib/*",
+      {
+        "from": "static",
+        "to": "static",
+        "filter": ["**/*"]
+      }
+    ],
+    "extraResources": [
+      "static/*",
+      "lib/*",
+      {
+        "from": "static",
+        "to": "static",
+        "filter": ["**/*"]
+      }
     ],
     "win": {
       "icon": "static/img/icon/demeter.ico",
       "asarUnpack": "**/lib/*.exe",
       "requestedExecutionLevel": "requireAdministrator",
       "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
+        "portable"
       ]
     },
-    "nsis": {
-      "artifactName": "Demeter-v${version}.exe"
+    "portable": {
+      "artifactName": "Demeter-v${version}.exe",
+      "requestExecutionLevel": "admin"
     }
   },
   "author": "Sam Chilton",
   "license": "MIT",
   "devDependencies": {
     "electron": "^36.3.2",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "tsx": "^4.20.3"
   },
   "type": "module"
 }

@@ -1,21 +1,18 @@
 /* eslint-disable no-unused-vars */
 
 import path from 'path';
-import {Logs as _Logs} from 'xeue-logs';
+import { Logs as _Logs } from 'xeue-logs';
 import { Config } from 'xeue-config';
 import { Shell } from 'xeue-shell';
 import { app, BrowserWindow, ipcMain as frontend } from 'electron';
-import { version } from './package.json';
+import pkg from './package.json' with { type: "json" };
 import electronEjs from 'electron-ejs';
 import { MicaBrowserWindow, IS_WINDOWS_11 } from 'mica-electron';
 import JSON5 from 'json5';
 import fs from 'fs';
 // import unhandled from 'electron-unhandled';
-
 // unhandled();
-
 const background = IS_WINDOWS_11 ? 'micaActive' : 'bg-dark';
-
 const __internal = import.meta.dirname;
 const __data = path.join(app.getPath("documents"), 'DemeterData');
 const __static = `${app.isPackaged ? process.resourcesPath : __internal}/static`;
@@ -134,53 +131,35 @@ type FramePrefered = {
 }
 
 /* Globals */
-
 let mainWindow:MicaBrowserWindow|BrowserWindow;
 let jobs = 0;
 let requestSave = false;
 const pollRate = 3;
 const saveRate = 5;
-const frameCommandsList = [4108, 4101, 4103, 4105, 4208, 4201, 4203, 4205]
-const shufflesList = [50265, 50565, 50865, 51165, 51465, 51765, 52065, 52365, 52665, 52965, 53265, 53565, 53865, 54165, 54465, 54765]
-
-const Logs = new _Logs(
-	false,
-	'DemeterLogging',
-	__data,
-	'D',
-	false
-)
-const config = new Config(
-	Logs
-);
-
+const frameCommandsList = [4108, 4101, 4103, 4105, 4208, 4201, 4203, 4205];
+const shufflesList = [50265, 50565, 50865, 51165, 51465, 51765, 52065, 52365, 52665, 52965, 53265, 53565, 53865, 54165, 54465, 54765];
+const Logs = new _Logs(false, 'DemeterLogging', __data, 'D', false);
+const config = new Config(Logs);
 const commandsJSON = fs.readFileSync(path.join(__internal, 'commandsDB.json'));
 const commandsDB:GroupsDB = JSON5.parse(commandsJSON.toString());
-
 let frames:Frames = loadData('frames');
 let groups:Groups = loadData('groups');
-
 /* Start App */
-
 (async () => {
-
 	await app.whenReady();
 	await setUpApp();
 	await createWindow();
-
 	{ /* Config */
 		Logs.printHeader('Demeter');
-		config.path(__data)
+		config.path(__data);
 		config.require('systemName', [], 'What is the name of the system');
-		config.require('loggingLevel', {'A':'All', 'D':'Debug', 'W':'Warnings', 'E':'Errors'}, 'Set logging level');
-		config.require('createLogFile', {true: 'Yes', false: 'No'}, 'Save logs to local file');
-		config.require('debugLineNum', {true: 'Yes', false: 'No'}, 'Print line numbers', ['advancedConfig', true]);
-
+		config.require('loggingLevel', { 'A': 'All', 'D': 'Debug', 'W': 'Warnings', 'E': 'Errors' }, 'Set logging level');
+		config.require('createLogFile', { true: 'Yes', false: 'No' }, 'Save logs to local file');
+		config.require('debugLineNum', { true: 'Yes', false: 'No' }, 'Print line numbers', ['advancedConfig', true]);
 		config.default('systemName', 'Demeter');
 		config.default('loggingLevel', 'W');
 		config.default('createLogFile', true);
 		config.default('debugLineNum', false);
-
 		if (!await config.fromFile('config.conf')) {
 			config.set('systemName', 'Demeter');
 			config.set('loggingLevel', 'W');
@@ -188,11 +167,9 @@ let groups:Groups = loadData('groups');
 			config.set('debugLineNum', false);
 			config.write();
 		}
-
 		if (config.get('loggingLevel') == 'D' || config.get('loggingLevel') == 'A') {
 			config.set('debugLineNum', true);
 		}
-
 		Logs.setConf({
 			'createLogFile': config.get('createLogFile'),
 			'logsFileName': 'DemeterLogging',
@@ -200,8 +177,7 @@ let groups:Groups = loadData('groups');
 			'loggingLevel': config.get('loggingLevel'),
 			'debugLineNum': config.get('debugLineNum'),
 		});
-
-		Logs.log('Running version: v'+version, ['H', 'SERVER', Logs.g]);
+		Logs.log('Running version: v' + pkg.version, ['H', 'SERVER', Logs.g]);
 		Logs.log(`Logging to: ${path.join(__data, 'logs')}`, ['H', 'SERVER', Logs.g]);
 		Logs.log(`Config saved to: ${path.join(__data, 'config.conf')}`, ['H', 'SERVER', Logs.g]);
 		config.print();
@@ -223,38 +199,28 @@ let groups:Groups = loadData('groups');
 			}
 		});
 	}
-
 	startLoops();
 })().catch(error => {
 	console.log(error);
 });
-
 const ejs = new electronEjs({
 	'static': __static,
 	'background': background,
-	'version': version,
+	'version': pkg.version,
 	'systemName': config.get('systemName'),
 	'commands': commandsDB
 }, {});
-
 process.on('uncaughtException', error => {
 	Logs.error('Uncaught error', error);
 });
-
 process.on('unhandledRejection', (error:any) => {
 	Logs.error('Uncaught error', error);
 });
-
-
 /* Electron */
-
 function frontendSend(command:string, data:any) {
 	mainWindow.webContents.send(command, data);
 }
-
 async function setUpApp() {
-
-
 	frontend.on('window', (event, message) => {
 		switch (message) {
 		case 'exit':
@@ -267,9 +233,7 @@ async function setUpApp() {
 			break;
 		}
 	});
-
 	/* Frames */
-
 	frontend.on('addFrame', (event, data) => {
 		if (frames[data.ip]) {
 			frames[data.ip].number = data.number;
@@ -278,9 +242,10 @@ async function setUpApp() {
 			frames[data.ip].group = data.group;
 			frames[data.ip].done = true;
 			frames[data.ip].type = data.type;
-		} else {
+		}
+		else {
 			frames[data.ip] = {
-				"number":data.number,
+				"number": data.number,
 				"name": data.name,
 				"ip": data.ip,
 				"enabled": false,
@@ -294,12 +259,10 @@ async function setUpApp() {
 		save();
 		frontendSend('frames', frames);
 		Logs.info('Added/updated frames', frames);
-	})
-
-	frontend.on('getFrames', (event,data) => {
+	});
+	frontend.on('getFrames', (event, data) => {
 		frontendSend('frames', frames);
-	})
-
+	});
 	frontend.on('setCommand', (event, data) => {
 		try {
 			frames[data.ip].slots[data.slot].prefered[data.command] = {
@@ -309,8 +272,10 @@ async function setUpApp() {
 				'type': data.dataType,
 				'take': data.take
 			};
-		} catch (error) {			
-			if (!frames[data.ip].slots[data.slot].prefered) frames[data.ip].slots[data.slot].prefered = {};
+		}
+		catch (error) {			
+			if (!frames[data.ip].slots[data.slot].prefered)
+				frames[data.ip].slots[data.slot].prefered = {};
 			frames[data.ip].slots[data.slot].prefered[data.command] = {
 				'value': data.value,
 				'enabled': data.enabled,
@@ -320,13 +285,14 @@ async function setUpApp() {
 			};
 		}
 		save();
-	})
-
+	});
 	frontend.on('setEnable', (event, data) => {
 		try {
-			frames[data.ip].slots[data.slot].prefered[data.command].enabled = data.enabled
-		} catch (error) {			
-			if (!frames[data.ip].slots[data.slot].prefered) frames[data.ip].slots[data.slot].prefered = {};
+			frames[data.ip].slots[data.slot].prefered[data.command].enabled = data.enabled;
+		}
+			catch (error) {			
+			if (!frames[data.ip].slots[data.slot].prefered)
+				frames[data.ip].slots[data.slot].prefered = {};
 			frames[data.ip].slots[data.slot].prefered[data.command] = {
 				'value': null,
 				'enabled': data.enabled,
@@ -334,32 +300,27 @@ async function setUpApp() {
 			};
 		}
 		save();
-	})
-
+	});
 	frontend.on('enableFrame', (event, data) => {
 		frames[data.ip].enabled = data.enabled;
 		save();
-	})
-
+	});
 	frontend.on('scanFrame', (event, data) => {
 		frames[data.ip].scan = data.scan;
 		frames[data.ip].done = true;
 		save();
-	})
-
+	});
 	frontend.on('deleteFrame', (event, data) => {
 		delete frames[data.ip];
 		save();
-	})
-
+	});
 	frontend.on('enableSlot', (event, data) => {
 		frames[data.ip].slots[data.slot].enabled = data.enabled;
 		save();
-	})
-
+	});
 	frontend.on('cardReboot', async (event, data) => {
 		const rolltrak = new Shell(Logs, 'CHECK', 'D');
-		const slot = String(Number(data.slot).toString(16)).padStart(2, '0')
+		const slot = String(Number(data.slot).toString(16)).padStart(2, '0');
 		const [address, err] = await getFrameAddress(data.frameIP);
 		if (err) {
 			Logs.error(`Failed to reboot frame: ${data.frameIP}`, err);
@@ -367,31 +328,27 @@ async function setUpApp() {
 		let command = `rolltrak -a ${data.frameIP} 4114@0000:${address}:${slot}=1`;
 		Logs.debug(`Rebboting frame: ${data.frameIP}, slot: ${data.slot}, command: ${command}`);
 		rolltrak.run(command, false);
-	})
-
+	});
 	/* Groups */
-
-	frontend.on('addGroup', (event,data) => {
+	frontend.on('addGroup', (event, data) => {
 		if (groups[data.name]) {
-			groups[data.name].name = data.name
-			groups[data.name].enabled = data.enabled
-		} else {
+			groups[data.name].name = data.name;
+			groups[data.name].enabled = data.enabled;
+		}
+		else {
 			groups[data.name] = {
 				"enabled": false,
 				"name": data.name,
 				"commands": {}
-			}
+			};
 		}
 		save();
 		frontendSend('groups', groups);
 		Logs.info('Added/updated groups', groups);
-	})
-
-	frontend.on('getGroups', (event,data) => {
+	});
+	frontend.on('getGroups', (event, data) => {
 		frontendSend('groups', groups);
-	})
-
-
+	});
 	frontend.on('setGroupCommand', (event, data) => {
 		try {
 			groups[data.group].commands[data.command] = {
@@ -402,8 +359,10 @@ async function setUpApp() {
 				"increment": data.increment,
 				'take': data.take
 			};
-		} catch (error) {			
-			if (!groups[data.group].commands) groups[data.group].commands = {};
+		}
+		catch (error) {			
+			if (!groups[data.group].commands)
+				groups[data.group].commands = {};
 			groups[data.group].commands[data.command] = {
 				'value': data.value,
 				'enabled': data.enabled,
@@ -414,40 +373,34 @@ async function setUpApp() {
 			};
 		}
 		save();
-	})
-
+	});
 	frontend.on('enableGroup', (event, data) => {
 		groups[data.name].enabled = data.enabled;
 		save();
-	})
-
-	frontend.on('setGroups', (event ,data) => {
+	});
+	frontend.on('setGroups', (event, data) => {
 		groups = data;
 		frontendSend('groups', groups);
 		Logs.debug('Saving');
 		writeData('frames', frames);
 		writeData('groups', groups);
-	})
-
+	});
 	frontend.on('deleteGroup', (event, data) => {
 		delete groups[data.name];
 		save();
-	})
-
-	frontend.on('setFrames', (event ,data) => {
+	});
+	frontend.on('setFrames', (event, data) => {
 		frames = data;
 		frontendSend('frames', frames);
 		Logs.debug('Saving');
 		writeData('frames', frames);
 		writeData('groups', groups);
-	})
-
-
+	});
 	app.on('activate', async () => {
-		if (BrowserWindow.getAllWindows().length === 0) createWindow();
+		if (BrowserWindow.getAllWindows().length === 0)
+			createWindow();
 	});
 }
-
 async function createWindow() {
 	const windowOptions: Electron.BrowserWindowConstructorOptions = {
 		width: 1640,
@@ -466,33 +419,30 @@ async function createWindow() {
 			symbolColor: '#ffffff',
 			height: 49
 		}
-	}
-	
+	};
 	if (IS_WINDOWS_11) {
         mainWindow = new MicaBrowserWindow(windowOptions);
-        if (mainWindow instanceof  MicaBrowserWindow) {
+        if (mainWindow instanceof MicaBrowserWindow) {
             mainWindow.setDarkTheme();
             mainWindow.setMicaEffect();
         }
-    } else {
+	}
+		else {
         mainWindow = new BrowserWindow(windowOptions);
     }
-
 	if (!app.commandLine.hasSwitch('hidden')) {
 		mainWindow.show();
-	} else {
+	}
+	else {
 		mainWindow.hide();
 	}
-
 	mainWindow.on('close', function (event) {
 		Logs.warn("Exiting");
 	});
-
 	mainWindow.loadURL(path.resolve(__internal, 'views/app.ejs'));
 }
-
 async function sleep(seconds: number) {
-	await new Promise (resolve => setTimeout(resolve, 1000*seconds));
+	await new Promise(resolve => setTimeout(resolve, 1000 * seconds));
 }
 
 async function getFrameAddress(frameIP: string) {
@@ -503,97 +453,93 @@ async function getFrameAddress(frameIP: string) {
 		}
 		if (unitAddresses[17044] !== 'Not In Use') {
 			return [unitAddresses[17044].split('= 0x')[1] || '10', false];
-		} else if (unitAddresses[16482].includes(':')) {
+		}
+		else if (unitAddresses[16482].includes(':')) {
 			return [unitAddresses[16482].split(':')[1] || '01', false];
-		} else {
+		}
+		else {
 			return ['10', 'failed to get unit address'];
 		}
-	} catch (error) {
+	}
+	catch (error) {
 		return ['10', 'failed to get unit address'];
 	}
 }
-
 async function checkFrame(frameIP: string) {
 	Logs.debug(`Scanning frame ${frameIP}`);
 	const rolltrak = new Shell(Logs, 'CHECK', 'D');
-
-	const frame = frames[frameIP]
+	const frame = frames[frameIP];
 	if (!frame.scan) {
 		frame.done = true;
-		frontendSend('frameStatus', {'frameIP': frameIP, 'status': 'Not Scanning', 'offline':frame.offline});
-		return 
+		frontendSend('frameStatus', { 'frameIP': frameIP, 'status': 'Not Scanning', 'offline': frame.offline });
+		return;
 	}
 	const foundSlots:string[] = [];
-
 	frame.done = false;
-
-	frontendSend('frameStatus', {'frameIP': frameIP, 'status': 'Connecting to frame', 'offline':frame.offline});
+	frontendSend('frameStatus', { 'frameIP': frameIP, 'status': 'Connecting to frame', 'offline': frame.offline });
 	const [address, err] = await getFrameAddress(frameIP);
 	if (err) {
 		frame.offline = true;
-		frontendSend('frameStatus', {'frameIP': frameIP, 'status': 'Cannot reach frame', 'offline':frame.offline});
+		frontendSend('frameStatus', { 'frameIP': frameIP, 'status': 'Cannot reach frame', 'offline': frame.offline });
 		frame.done = true;
-		save()
+		save();
 		Logs.debug(`Frame: ${frameIP} failed to get unit address, so probably not online`, err);
-		return
+		return;
 	}
-	
 	frame.offline = false;
-
 	const commands:number[] = [];
-		
 	for (let slot = 0; slot < 20; slot++) {
-		commands.push(16530 + slot)
+		commands.push(16530 + slot);
 	}
 
-	frontendSend('frameStatus', {'frameIP': frameIP, 'status': 'Discovering cards within frame', 'offline':frame.offline});
+	frontendSend('frameStatus', { 'frameIP': frameIP, 'status': 'Discovering cards within frame', 'offline': frame.offline });
 	const [slotsData, parseErr] = await getInfo(commands, frameIP, '00', address);
-
 	if (parseErr) {
 		Logs.error(`Frame: ${frameIP} Issue parsing slots data`, parseErr);
 	}
-
-	frontendSend('frameStatus', {'frameIP': frameIP, 'status': 'Getting cards current config', 'offline':frame.offline});
+	frontendSend('frameStatus', { 'frameIP': frameIP, 'status': 'Getting cards current config', 'offline': frame.offline });
 	for (const cmd in slotsData) {
-		const slot = String(Number(cmd)-16529).padStart(2, '0');
+		const slot = String(Number(cmd) - 16529).padStart(2, '0');
 		try {
 			if (typeof slotsData[cmd] !== "string") {
 				Logs.info(`Frame: ${frameIP} Slot: ${slot} is not a UCP`);
-				if (frame.slots[slot]) frame.slots[slot].offline = true;
+				if (frame.slots[slot])
+					frame.slots[slot].offline = true;
 				continue;
 			}
 			if (!slotsData[cmd].includes('IQUCP25_SDI') && !slotsData[cmd].includes('IQUCP_MADI')) {
 				Logs.info(`Frame: ${frameIP} Slot: ${slot} is not a UCP`);
-				if (frame.slots[slot]) frame.slots[slot].offline = true;
+				if (frame.slots[slot])
+					frame.slots[slot].offline = true;
 				continue;
 			}
-			if (!frame.slots) frame.slots = {};
-			if (!frame.slots[slot]) frame.slots[slot] = {
-				offline: false,
-				enabled: true,
-				prefered: {},
-				active: {},
-				group: {},
-				ins: 0,
-				outs: 0
-			}
+			if (!frame.slots)
+				frame.slots = {};
+			if (!frame.slots[slot])
+				frame.slots[slot] = {
+					offline: false,
+					enabled: true,
+					prefered: {},
+					active: {},
+					group: {},
+					ins: 0,
+					outs: 0
+				};
 			frame.slots[slot].offline = false;
 			foundSlots.push(slot);
-		} catch (error) {
+		}
+		catch (error) {
 			Logs.error(`Issue with slot: ${slot} at IP: ${frameIP}`, error);
 			continue;
 		}
 	}
-
 	const slotsPromises:Promise<void>[] = [];
-
 	Logs.info(`Frame: ${frameIP} found slots`, foundSlots);
 	foundSlots.forEach(async slot => {
 		slotsPromises.push(new Promise(async (resolve, reject) => {
 			const slotHex = Number(slot).toString(16).padStart(2, '0');
 			let checkNull = false;
 			const [cardInfo, err] = await getInfo([4101, 4103, 4105, 4108, 4128, 4129, 4201, 4203, 4205, 4208, 4228, 4229], frameIP, slotHex, address);
-
 			const cardAIP = cardInfo[4101];
 			const cardAMask = cardInfo[4103];
 			const cardAGate = cardInfo[4105];
@@ -606,8 +552,8 @@ async function checkFrame(frameIP: string) {
 			const cardBMode = cardInfo[4208];
 			const cardBUP = cardInfo[4228];
 			const cardBSFP = cardInfo[4229];
-
-			if (!frame.slots[slot]) frame.slots[slot] = {
+			if (!frame.slots[slot])
+				frame.slots[slot] = {
 				enabled: true,
 				offline: false,
 				ins: 0,
@@ -616,37 +562,35 @@ async function checkFrame(frameIP: string) {
 				active: {},
 				group: {}
 			};
-
 			frame.slots[slot].ipa = cardAIP == "StringVal" ? null : cardAIP;
 			frame.slots[slot].ipb = cardBIP == "StringVal" ? null : cardBIP;
 			frame.slots[slot].ipaup = cardAUP;
 			frame.slots[slot].ipbup = cardBUP;
 			frame.slots[slot].sfp1 = cardASFP;
 			frame.slots[slot].sfp2 = cardBSFP;
-			
 			if (err) {
-				frontendSend('frameStatus', {'frameIP': frameIP, 'status': `Slot: ${slot} error resolving IPs`, 'offline':frame.offline});
+				frontendSend('frameStatus', { 'frameIP': frameIP, 'status': `Slot: ${slot} error resolving IPs`, 'offline': frame.offline });
 				Logs.error(`Frame ${frameIP}, Slot: ${slot} error resolving IPs`, [cardAIP, cardBIP]);
 				frame.slots[slot].offline = true;
 				frame.done = true;
 				resolve();
-				return
+				return;
 			}
-			
 			let requestIP = '';
 			if (cardAUP == "UP" && cardAIP !== "StringVal" && cardAIP !== "No rollcall connection") {
 				requestIP = cardAIP;
-				Logs.info(`Using primary IP: ${cardAIP}`)
-			} else if (cardBUP == "UP" && cardBIP !== "StringVal" && cardBIP !== "No rollcall connection") {
-				requestIP = cardBIP;
-				Logs.info(`Using secondary IP: ${cardBIP}`)
-			} else {
-				Logs.warn(`Frame: ${frameIP} IPs for slot: ${slot} not found or not online`);
-				Logs.info(`IP info for Frame: ${frameIP}, slot: ${slot}`, [[cardAIP, cardAMask, cardAGate, cardAUP],[cardBIP, cardBMask, cardBGate, cardBUP]])
+				Logs.info(`Using primary IP: ${cardAIP}`);
 			}
-
-			if (frame.slots[slot].active === undefined) frame.slots[slot].active = {}
-		
+			else if (cardBUP == "UP" && cardBIP !== "StringVal" && cardBIP !== "No rollcall connection") {
+				requestIP = cardBIP;
+				Logs.info(`Using secondary IP: ${cardBIP}`);
+			}
+			else {
+				Logs.warn(`Frame: ${frameIP} IPs for slot: ${slot} not found or not online`);
+				Logs.info(`IP info for Frame: ${frameIP}, slot: ${slot}`, [[cardAIP, cardAMask, cardAGate, cardAUP], [cardBIP, cardBMask, cardBGate, cardBUP]]);
+			}
+			if (frame.slots[slot].active === undefined)
+				frame.slots[slot].active = {};
 
 			if (requestIP) {
 				const [slotInfo, err] = await checkCard(requestIP)
@@ -1049,13 +993,14 @@ function startLoops() {
 		Logs.debug(`Current Jobs: ${jobs}`);
 	}, pollRate*1000)
 
-	setInterval(()=>{
-		if (!requestSave) return;
+	setInterval(() => {
+		if (!requestSave)
+			return;
 		Logs.debug('Saving');
 		writeData('frames', frames);
 		writeData('groups', groups);
 		requestSave = false;
-	}, saveRate*1000)
+	}, saveRate * 1000);
 }
 
 
