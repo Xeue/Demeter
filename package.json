@@ -17,7 +17,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "compile": "tsc --allowJS -t es6 main.ts",
-    "start": "electron --js-flags=\"--max_old_space_size=4096\" .",
+    "start": "electron --js-flags=\"--max_old_space_size=4096\" main.ts",
     "build": "electron-builder --win"
   },
   "build": {
