@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Demeter — Login</title>
+        <meta name="color-scheme" content="dark">
+        <link type="text/css" rel="stylesheet" href="{{.Static}}/lib/bootstrap.min.css">
+        <link type="text/css" rel="stylesheet" href="{{.Static}}/css/app.css">
+    </head>
+    <body class="bg-dark d-flex align-items-center justify-content-center vh-100" data-bs-theme="dark">
+        <form method="POST" action="/login" class="card p-4" style="min-width:320px">
+            <h3 class="mb-3 text-center">{{.SystemName}}</h3>
+            {{if .Error}}<div class="alert alert-danger py-2">{{.Error}}</div>{{end}}
+            <input class="form-control mb-2" type="text" name="username" placeholder="Username" autofocus required>
+            <input class="form-control mb-3" type="password" name="password" placeholder="Password" required>
+            <button class="btn btn-primary w-100" type="submit">Sign in</button>
+            <div class="text-center text-secondary mt-3" style="font-size:.8rem">v{{.Version}}</div>
+        </form>
+    </body>
+</html>

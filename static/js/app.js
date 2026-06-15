@@ -10,30 +10,57 @@ document.addEventListener('DOMContentLoaded', () => {
 	backend.on('frameStatus', doFrameStatus);
 	backend.on('groups', drawGroups);
 	backend.on('frameError', doFrameError);
+	backend.on('users', drawUsers);
+	backend.on('credentials', showCredentials);
+
+	on('click', '#addUserBtn', addUser);
+	on('change', '.userRole', _el => {
+		const u = _el.closest('[data-user]').getAttribute('data-user');
+		backend.send('setUserRole', { username: u, role: _el.value });
+	});
+	on('click', '.userReset', _el => {
+		const row = _el.closest('[data-user]');
+		const pass = row.querySelector('.userPass').value;
+		if (pass) backend.send('resetPassword', { username: row.getAttribute('data-user'), password: pass });
+	});
+	on('click', '.userDelete', _el => {
+		backend.send('deleteUser', { username: _el.closest('[data-user]').getAttribute('data-user') });
+	});
+	if (typeof isAdmin !== 'undefined' && isAdmin) backend.send('getUsers');
 
 	on('click', '.tabSelect', showTab)
 	on('click', '#addFrameIPBtn', addFrame);
 	on('click', '#addGroupBtn', addGroup);
 
-	on('click', '#exportGroups', ()=>{download('groups.json', JSON.stringify(window.groups, null,4))})
-	on('click', '#exportFrames', ()=>{download('frames.json', JSON.stringify(window.frames, null,4))})
-	on('click', '#importGroups', async ()=>{
-		const _input = document.getElementById('importGroupsFile');
-		console.log(_input)
-		console.log(_input.files)
-		console.log(_input.files.item(0))
-		const groups = await _input.files.item(0).text()
-		backend.send('setGroups', JSON.parse(groups));
-	})
-	on('click', '#importFrames', async ()=>{
-		const _input = document.getElementById('importFramesFile');
-		const frames = await _input.files.item(0).text()
-		backend.send('setFrames', JSON.parse(frames));
-	})
+	// Granular, unified import/export.
+	on('click', '#importExport', () => backend.send('getExport')); // refresh export tree from authoritative state
+	backend.on('exportData', data => {
+		window._exportData = data || { frames: {}, groups: {} };
+		buildIOTree(document.getElementById('exportTree'), window._exportData, true);
+	});
+	on('click', '.ioTab', _el => switchIOTab(_el.getAttribute('data-iotab')));
+	on('click', '.ioSelectAll', () => setIOTreeChecked(true));
+	on('click', '.ioSelectNone', () => setIOTreeChecked(false));
+	on('change', '.ioGroupChk', _el => cascadeGroup(_el));
+	on('change', '.ioFrameChk', _el => cascadeFrame(_el));
+	on('click', '#exportSelected', doExportSelected);
+	on('click', '#importSelected', doImportSelected);
+	const _impFile = document.getElementById('importFile');
+	if (_impFile) _impFile.addEventListener('change', onImportFile);
 	on('click', '.cardReboot', _element => {
 		const slot = _element.closest('.slotCont').getAttribute('data-slot')
 		const frameIP = _element.closest('.frameCont').getAttribute('data-ip')
 		backend.send('cardReboot', {"frameIP":frameIP, "slot": slot});
+	})
+	on('click', '.addCardBtn', _element => {
+		const _frame = _element.closest('.frameCont');
+		const slot = _frame.querySelector('.addCardSlot').value;
+		stageCard(_frame.getAttribute('data-ip'), slot);
+	})
+	on('click', '.cardRemove', _element => {
+		const slot = _element.closest('.slotCont').getAttribute('data-slot');
+		const frameIP = _element.closest('.frameCont').getAttribute('data-ip');
+		removeCard(frameIP, slot);
 	})
 	on('click', '#showOffline', _element => {
 		const _body = document.getElementById('body');
@@ -76,6 +103,14 @@ document.addEventListener('DOMContentLoaded', () => {
 	on('click', '.frameDelete', (_element) => doFrameDelete(_element));
 	on('click', '.groupDelete', (_element) => doGroupDelete(_element));
 	on('click', '.frameScanMode', (_element) => doFrameMode(_element));
+	on('change', '.frameAutoReboot', _el => {
+		const frameIP = _el.closest('.frameCont').getAttribute('data-ip');
+		backend.send('setAutoReboot', { frameIP: frameIP, mode: _el.value });
+	});
+	const _globalAR = document.getElementById('globalAutoReboot');
+	if (_globalAR) _globalAR.addEventListener('change', () => {
+		backend.send('setGlobalAutoReboot', { enabled: _globalAR.checked });
+	});
 
 	/* Group controls */
 
@@ -122,13 +157,57 @@ function addFrame() {
 	backend.send('addFrame', {"ip":frameIP, "number": frameNumber, "name": frameName, "group": frameGroup});
 }
 
+// mediaText renders a card interface line, tolerating absent values (e.g. a
+// staged card that has no IPs yet) instead of printing "undefined".
+function mediaText(n, ip, up, sfp) {
+	return `Media ${n}: ${ip == null || ip === '' ? '—' : ip} - ${up || '—'}/${sfp || '—'}`;
+}
+
+// stageCard pre-configures a slot before its card is online. The server persists
+// it; we also render it optimistically so the override editor appears at once.
+function stageCard(frameIP, slot) {
+	backend.send('stageCard', { ip: frameIP, slot: slot });
+	const frame = window.frames && window.frames[frameIP];
+	if (!frame) return;
+	frame.slots = frame.slots || {};
+	if (!frame.slots[slot]) {
+		frame.slots[slot] = { enabled: true, staged: true, offline: true, prefered: {}, active: {}, group: {}, ins: 0, outs: 0, ipa: null, ipb: null, ipaup: '', ipbup: '', sfp1: '', sfp2: '' };
+	} else {
+		frame.slots[slot].staged = true;
+	}
+	delete _slotRenderCache[frameIP + '|' + slot];
+	applySlotInfo({ frame: frame, slotName: slot, slot: frame.slots[slot] });
+}
+
+// removeCard unstages an expected card (only offered for staged slots).
+function removeCard(frameIP, slot) {
+	backend.send('removeCard', { ip: frameIP, slot: slot });
+	const frame = window.frames && window.frames[frameIP];
+	if (frame && frame.slots) delete frame.slots[slot];
+	delete _slotRenderCache[frameIP + '|' + slot];
+	const _slotCont = document.querySelector(`#framesCont [data-ip="${frameIP}"] [data-slot="${slot}"]`);
+	if (_slotCont) _slotCont.remove();
+}
+
 function drawFrames(frames) {
 	window.frames = frames;
+	// Any frame the backend now reports is live again (e.g. it was re-added), so stop suppressing it
+	if (window.deletedFrames) {
+		for (const frameIP in frames) window.deletedFrames.delete(frameIP);
+	}
 	const _framesCont = document.getElementById('framesCont');
 	_framesCont.innerHTML = '';
+	// The slot DOM was just wiped, so the per-slot render cache is stale.
+	for (const k in _slotRenderCache) delete _slotRenderCache[k];
 	for (const frameIP in frames) {
 		const _frame = drawFrame(frames[frameIP]);
 		_framesCont.append(_frame);
+		// Render known/staged slots from frame data so pre-configured (and
+		// last-known) cards show without waiting for the next live scan.
+		const _slots = frames[frameIP].slots || {};
+		for (const slotName in _slots) {
+			applySlotInfo({ frame: frames[frameIP], slotName: slotName, slot: _slots[slotName] });
+		}
 	}
 }
 
@@ -164,6 +243,15 @@ function drawFrame(frame) {
 		<select class="frameScanMode form-select form-select-sm w-auto ms-1">
 			${options}
 		</select>
+		<select class="frameAutoReboot form-select form-select-sm w-auto ms-1" title="Auto-reboot a card after an IP/mode change (needs a reboot to apply)">
+			<option value="" ${!frame.autoReboot ? 'selected' : ''}>Auto-reboot: default</option>
+			<option value="on" ${frame.autoReboot === 'on' ? 'selected' : ''}>Auto-reboot: on</option>
+			<option value="off" ${frame.autoReboot === 'off' ? 'selected' : ''}>Auto-reboot: off</option>
+		</select>
+		<select class="addCardSlot form-select form-select-sm w-auto ms-1" title="Pre-configure a card before it is online">
+			${Array.from({length:20},(_,i)=>{const s=String(i+1).padStart(2,'0');return `<option value="${s}">Slot ${s}</option>`}).join('')}
+		</select>
+		<button class="addCardBtn btn btn-outline-primary btn-sm ms-1" title="Stage this slot so its settings apply when the card comes online">Add Card</button>
 		<button class="frameDelete btn btn-danger btn-sm ms-1">Delete</button>
 	</header>`
 	_frameCont.insertAdjacentHTML('beforeend', _header);
@@ -171,22 +259,51 @@ function drawFrame(frame) {
 	return _frameCont;
 }
 
+const _slotRenderCache = {};
+const _slotQueue = new Map();
+let _slotRAF = null;
+
+// drawSlotInfo now receives a per-slot delta {frame, slotName, slot} instead of
+// the whole frame + all slots sent once per slot (the old O(slots^2) cost).
+// Bursts from one scan cycle are coalesced into a single requestAnimationFrame
+// flush, and a slot whose data is unchanged is skipped before any DOM work.
 function drawSlotInfo(slotInfo) {
-	if (window.pause) return
+	if (window.pause) return;
+	if (!slotInfo || !slotInfo.frame) return;
+	_slotQueue.set(slotInfo.frame.ip + '|' + slotInfo.slotName, slotInfo);
+	if (_slotRAF === null) _slotRAF = requestAnimationFrame(flushSlotInfo);
+}
+
+function flushSlotInfo() {
+	_slotRAF = null;
+	const items = Array.from(_slotQueue.values());
+	_slotQueue.clear();
+	for (const slotInfo of items) applySlotInfo(slotInfo);
+}
+
+function applySlotInfo(slotInfo) {
 	const frameIP = slotInfo.frame.ip;
+	// A late slotInfo from an in-flight scan can arrive after the user deleted the frame; don't redraw it
+	if (window.deletedFrames && window.deletedFrames.has(frameIP)) return;
+	const cacheKey = frameIP + '|' + slotInfo.slotName;
+	const slotJSON = JSON.stringify(slotInfo.slot);
+	if (_slotRenderCache[cacheKey] === slotJSON) return; // unchanged -> skip the DOM walk
+	_slotRenderCache[cacheKey] = slotJSON;
+
 	const _framesCont = document.getElementById('framesCont');
 	let _frameData = _framesCont.querySelector(`[data-ip="${frameIP}"] .data`);
 	if (!_frameData) {
-		_frame = drawFrame(slotInfo.frame);
+		const _frame = drawFrame(slotInfo.frame);
 		_framesCont.append(_frame);
 		_frameData = _framesCont.querySelector(`[data-ip="${frameIP}"] .data`);
 	}
-	
-	for (const slotName in slotInfo.slots) {
+
+	{
+		const slotName = slotInfo.slotName;
 		let slotExists = true;
-		if (!Object.prototype.hasOwnProperty.call(slotInfo.slots, slotName)) return;
-		const slot = slotInfo.slots[slotName];
-		
+		const slot = slotInfo.slot;
+		if (!slot) return;
+
 		let _slotCont = _frameData.querySelector(`[data-slot="${slotName}"]`);
 
 		if (!_slotCont) {
@@ -200,24 +317,45 @@ function drawSlotInfo(slotInfo) {
 				<button class="btn btn-secondary btn-sm me-2 collapseSettings">Collapse All</button>
 				<input type="checkbox" class="form-check form-check-input collapseHeader cardCollapse" id="header_${frameIP.replaceAll('.','_')}_${slotName}">
 				<label class="groupName" for="header_${frameIP.replaceAll('.','_')}_${slotName}">Slot ${slotName}</label>
-				<div class="cardIface card1Iface me-2" data-status="${slot.ipaup}">Media 1: ${slot.ipa} - ${slot.ipaup}/${slot.sfp1}</div>
-				<div class="cardIface card2Iface me-auto" data-status="${slot.ipbup}">Media 2: ${slot.ipb} - ${slot.ipbup}/${slot.sfp2}</div>
+				<div class="cardIface card1Iface me-2" data-status="${slot.ipaup || ''}">${mediaText(1, slot.ipa, slot.ipaup, slot.sfp1)}</div>
+				<div class="cardIface card2Iface me-auto" data-status="${slot.ipbup || ''}">${mediaText(2, slot.ipb, slot.ipbup, slot.sfp2)}</div>
 				<div class="blastLabel d-flex">Blast
 					<div class="form-switch">
 						<input type="checkbox" class="form-check-input slotEnable" ${slot.enabled ? 'checked' : ''}>
 					</div>
 				</div>
+				<span class="rebootNeeded badge bg-warning text-dark ms-1 d-none" title="">⟳ Reboot needed</span>
 				<button class="cardReboot btn btn-secondary btn-sm">Reboot</button>
+				<span class="stagedBadge badge bg-warning text-dark ms-1 d-none">Expected</span>
+				<button class="cardRemove btn btn-outline-danger btn-sm ms-1 d-none">Remove</button>
 			</header>`);
 		} else {
 			const _iface1 = _slotCont.querySelector('.card1Iface')
-			_iface1.innerHTML = `Media 1: ${slot.ipa} - ${slot.ipaup}/${slot.sfp1}`;
-			_iface1.setAttribute('data-status', slot.ipaup)
+			_iface1.innerHTML = mediaText(1, slot.ipa, slot.ipaup, slot.sfp1);
+			_iface1.setAttribute('data-status', slot.ipaup || '')
 			const _iface2 = _slotCont.querySelector('.card2Iface')
-			_iface2.innerHTML = `Media 2: ${slot.ipb} - ${slot.ipbup}/${slot.sfp2}`;
-			_iface2.setAttribute('data-status', slot.ipbup)
+			_iface2.innerHTML = mediaText(2, slot.ipb, slot.ipbup, slot.sfp2);
+			_iface2.setAttribute('data-status', slot.ipbup || '')
 		}
-		
+
+		// Reflect staged ("expected", pre-configured before discovery) state.
+		_slotCont.classList.toggle('staged', !!slot.staged);
+		// Keep offline state current on every render, but never hide a staged card
+		// (it has no live card yet by definition).
+		_slotCont.classList.toggle('offline', !!slot.offline && !slot.staged);
+		const _sb = _slotCont.querySelector('.stagedBadge');
+		const _cr = _slotCont.querySelector('.cardRemove');
+		if (_sb) _sb.classList.toggle('d-none', !slot.staged);
+		if (_cr) _cr.classList.toggle('d-none', !slot.staged);
+
+		// Reboot-needed indicator: show next to the Reboot button, with the
+		// reasons (which restart-required settings changed) as a hover tooltip.
+		const _rb = _slotCont.querySelector('.rebootNeeded');
+		if (_rb) {
+			_rb.classList.toggle('d-none', !slot.rebootNeeded);
+			_rb.title = (slot.rebootReasons || []).join('\n');
+		}
+
 		let _slot = _slotCont.querySelector(`.collapseSection`);
 		if (!_slot) {
 			slotExists = false;
@@ -339,8 +477,30 @@ function drawSlotInfo(slotInfo) {
 				checkDeps(_collapseSection);
 			})
 		}
+
+		markFailures(_slotCont, slot.failed);
 	}
 	// _frameData.innerHTML = `<pre>${JSON.stringify(slotInfo, null, 4)}</pre>`;
+}
+
+// markFailures flags command rows whose blasted SET never took effect (from
+// slot.failed: command id -> reason), and clears flags that have since cleared.
+function markFailures(_slotCont, failed) {
+	failed = failed || {};
+	_slotCont.querySelectorAll('.commandCont.cmdFailed').forEach(_c => {
+		if (!failed[_c.getAttribute('data-command')]) {
+			_c.classList.remove('cmdFailed');
+			const _r = _c.querySelector('.commandRead');
+			if (_r) _r.removeAttribute('title');
+		}
+	});
+	for (const cmd in failed) {
+		const _c = _slotCont.querySelector(`[data-command="${cmd}"]`);
+		if (!_c) continue;
+		_c.classList.add('cmdFailed');
+		const _r = _c.querySelector('.commandRead');
+		if (_r) _r.setAttribute('title', failed[cmd]);
+	}
 }
 
 function doFrameStatus(data) {
@@ -691,40 +851,44 @@ function showTab(_element) {
 			_tab.classList.add('d-none');
 		}
 	}
-	__tabs.querySelector(`[data-tab="${tab}"]`).classList.remove('d-none');
+	// (removed a querySelector-on-HTMLCollection call here that threw on every switch)
+	if (tab == 'users') backend.send('getUsers');
 }
 
+// doLog consumes the structured log event {timeString, level, category, message,
+// colour} from the Go server and prepends a single node + trims — no more
+// re-parsing the entire (up to 499-entry) list via innerHTML, and no ANSI parsing.
 function doLog(log) {
+	if (!log) return;
 	const _logs = document.getElementById('logs');
-	const cols = [31,32,33,34,35,36,37];
-	const specials = [1,2];
-	const reset = 0;
-	let currentCul = getClass(log.textColour);
-	let currnetSpec = 1;
-	let output = `<span class="logTimestamp">[${log.timeString}]</span><span class="logLevel ${getClass(log.levelColour)}">(${log.level})</span><span class="${getClass(log.colour)} logCatagory">${log.catagory}${log.seperator} </span>`;
-	const logArr = log.message.split('\x1b[');
-	logArr.forEach((element, index) => {
-		const num = parseInt(element.substr(0, element.indexOf('m')));
-		const text = index==0 ? element : element.substring(element.indexOf('m') + 1);
-		if (cols.includes(num)) {
-			currentCul = num;
-		} else if (specials.includes(num)) {
-			currnetSpec = num;
-		} else if (num == reset) {
-			currentCul = 37;
-			currnetSpec = 1;
-		}
-		output += `<span class="${getClass(currentCul)} ${getClass(currnetSpec)}">${text}</span>`;
-	})
-	output += `<span class="purpleLog logLinenum"> ${log.lineNumString}</span>`;
-
-	const _log = `<div class='log' data-level="${log.level}">${output}</div>`;
-	_logs.innerHTML = _log + _logs.innerHTML;
+	const _log = document.createElement('div');
+	_log.className = 'log';
+	_log.setAttribute('data-level', log.level || '');
+	const colourClass = colourToClass(log.colour);
+	_log.innerHTML =
+		`<span class="logTimestamp">[${log.timeString || ''}]</span>` +
+		`<span class="logLevel ${colourClass}">(${log.level || ''})</span>` +
+		`<span class="${colourClass} logCatagory">${escapeHTML(log.category || '')} </span>` +
+		`<span class="whiteLog">${escapeHTML(log.message || '')}</span>`;
+	_logs.insertBefore(_log, _logs.firstChild);
 	const maxLogs = 499;
-	_logs.childElementCount
-	if (_logs.childElementCount > maxLogs) {
-		_logs.children[maxLogs+1].remove();
+	while (_logs.childElementCount > maxLogs) _logs.lastElementChild.remove();
+}
+
+function colourToClass(c) {
+	switch (c) {
+		case 'red': return 'redLog';
+		case 'green': return 'greenLog';
+		case 'yellow': return 'yellowLog';
+		case 'blue': return 'blueLog';
+		case 'purple': return 'purpleLog';
+		case 'cyan': return 'cyanLog';
+		default: return 'whiteLog';
 	}
+}
+
+function escapeHTML(s) {
+	return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function getClass(num) {
@@ -948,6 +1112,8 @@ function doFrameDelete(_element) {
 	const _frame = _element.closest('.frameCont');
 	const frame = _frame.getAttribute('data-ip');
 	_frame.remove();
+	window.deletedFrames = window.deletedFrames || new Set();
+	window.deletedFrames.add(frame);
 	backend.send('deleteFrame', {
 		"ip":frame
 	});
@@ -1072,4 +1238,214 @@ function download(filename, text) {
 	document.body.appendChild(element);
 	element.click();
 	document.body.removeChild(element);
+}
+
+/* Users (admin) */
+
+function drawUsers(users) {
+	const _cont = document.getElementById('usersCont');
+	if (!_cont || !Array.isArray(users)) return;
+	_cont.innerHTML = '';
+	users.sort((a, b) => a.username.localeCompare(b.username));
+	for (const u of users) {
+		const _row = document.createElement('div');
+		_row.className = 'd-flex align-items-center gap-2 mb-2';
+		_row.setAttribute('data-user', u.username);
+		_row.innerHTML =
+			`<span class="me-2" style="min-width:160px">${escapeHTML(u.username)}${u.disabled ? ' (disabled)' : ''}</span>` +
+			`<select class="form-select form-select-sm w-auto userRole">` +
+				`<option value="operator"${u.role === 'operator' ? ' selected' : ''}>operator</option>` +
+				`<option value="admin"${u.role === 'admin' ? ' selected' : ''}>admin</option>` +
+			`</select>` +
+			`<input class="form-control form-control-sm w-auto userPass" type="password" placeholder="new password">` +
+			`<button class="btn btn-sm btn-secondary userReset">Reset Password</button>` +
+			`<button class="btn btn-sm btn-danger userDelete">Delete</button>`;
+		_cont.append(_row);
+	}
+}
+
+function addUser() {
+	const username = document.getElementById('addUserName').value;
+	const password = document.getElementById('addUserPass').value;
+	const role = document.getElementById('addUserRole').value;
+	if (!username || !password) return;
+	backend.send('addUser', { username: username, password: password, role: role });
+	document.getElementById('addUserName').value = '';
+	document.getElementById('addUserPass').value = '';
+}
+
+/* Import / Export (granular, unified: frames, cards and groups in one file) */
+
+function switchIOTab(tab) {
+	document.querySelectorAll('.ioTab').forEach(t => t.classList.toggle('active', t.getAttribute('data-iotab') === tab));
+	document.querySelectorAll('.ioPane').forEach(p => p.classList.toggle('d-none', p.getAttribute('data-iotab') !== tab));
+}
+
+function visibleIOTree() {
+	const pane = document.querySelector('.ioPane:not(.d-none)');
+	return pane ? pane.querySelector('.ioTree') : null;
+}
+
+function setIOTreeChecked(checked) {
+	const tree = visibleIOTree();
+	if (tree) tree.querySelectorAll('input[type="checkbox"]').forEach(c => { c.checked = checked; });
+}
+
+// buildIOTree renders groups + frames(+cards) with checkboxes from a
+// {frames, groups} bundle. `checked` sets the initial tick state.
+function buildIOTree(container, data, checked) {
+	if (!container) return;
+	const frames = (data && data.frames) || {};
+	const groups = (data && data.groups) || {};
+	container.innerHTML = '';
+
+	const groupNames = Object.keys(groups).sort();
+	if (groupNames.length) {
+		container.insertAdjacentHTML('beforeend', `<div class="ioSection">Groups</div>`);
+		for (const name of groupNames) {
+			container.insertAdjacentHTML('beforeend',
+				`<label class="ioRow ioGroup"><input type="checkbox" class="form-check-input ioGroupChk" data-group="${escAttr(name)}" ${checked ? 'checked' : ''}> <span>${escapeHTML(name)}</span></label>`);
+		}
+	}
+
+	container.insertAdjacentHTML('beforeend', `<div class="ioSection">Frames &amp; Cards</div>`);
+	for (const ip of Object.keys(frames).sort()) {
+		const f = frames[ip] || {};
+		const groupTag = f.group ? ` <span class="labelGroup">${escapeHTML(f.group)}</span>` : '';
+		container.insertAdjacentHTML('beforeend',
+			`<label class="ioRow ioFrame"><input type="checkbox" class="form-check-input ioFrameChk" data-frame="${escAttr(ip)}" data-group-of="${escAttr(f.group || '')}" ${checked ? 'checked' : ''}> <span>F${escapeHTML(f.number || '')} ${escapeHTML(f.name || '')} <span class="text-muted">(${escapeHTML(ip)})</span>${groupTag}</span></label>`);
+		const slots = f.slots || {};
+		for (const slotName of Object.keys(slots).sort()) {
+			const staged = slots[slotName] && slots[slotName].staged ? ' <span class="badge bg-secondary">expected</span>' : '';
+			container.insertAdjacentHTML('beforeend',
+				`<label class="ioRow ioSlot"><input type="checkbox" class="form-check-input ioSlotChk" data-frame="${escAttr(ip)}" data-slot="${escAttr(slotName)}" ${checked ? 'checked' : ''}> <span>Slot ${escapeHTML(slotName)}${staged}</span></label>`);
+		}
+	}
+}
+
+function cascadeFrame(_el) {
+	const tree = _el.closest('.ioTree');
+	if (!tree) return;
+	tree.querySelectorAll(`.ioSlotChk[data-frame="${attrSel(_el.getAttribute('data-frame'))}"]`).forEach(c => { c.checked = _el.checked; });
+}
+
+function cascadeGroup(_el) {
+	const tree = _el.closest('.ioTree');
+	if (!tree) return;
+	// Ticking a group ticks every frame assigned to it (and its cards).
+	tree.querySelectorAll(`.ioFrameChk[data-group-of="${attrSel(_el.getAttribute('data-group'))}"]`).forEach(fc => {
+		fc.checked = _el.checked;
+		cascadeFrame(fc);
+	});
+}
+
+// collectIO filters the source {frames, groups} by the ticked boxes in `tree`.
+function collectIO(tree, source) {
+	const out = { frames: {}, groups: {} };
+	const srcGroups = (source && source.groups) || {};
+	const srcFrames = (source && source.frames) || {};
+	tree.querySelectorAll('.ioGroupChk:checked').forEach(c => {
+		const name = c.getAttribute('data-group');
+		if (srcGroups[name]) out.groups[name] = srcGroups[name];
+	});
+	tree.querySelectorAll('.ioFrameChk').forEach(fc => {
+		const ip = fc.getAttribute('data-frame');
+		const checkedSlots = tree.querySelectorAll(`.ioSlotChk[data-frame="${attrSel(ip)}"]:checked`);
+		if (!fc.checked && checkedSlots.length === 0) return;
+		const src = srcFrames[ip];
+		if (!src) return;
+		const f = Object.assign({}, src);
+		f.slots = {};
+		checkedSlots.forEach(sc => {
+			const s = sc.getAttribute('data-slot');
+			if (src.slots && src.slots[s]) f.slots[s] = src.slots[s];
+		});
+		out.frames[ip] = f;
+	});
+	return out;
+}
+
+function doExportSelected() {
+	const tree = document.getElementById('exportTree');
+	if (!tree || !window._exportData) return;
+	const sel = collectIO(tree, window._exportData);
+	if (Object.keys(sel.frames).length === 0 && Object.keys(sel.groups).length === 0) {
+		alert('Nothing selected to export.');
+		return;
+	}
+	const bundle = { demeterExport: 1, exportedAt: new Date().toISOString(), frames: sel.frames, groups: sel.groups };
+	download('demeter-export.json', JSON.stringify(bundle, null, 2));
+}
+
+async function onImportFile(e) {
+	const file = e.target.files && e.target.files[0];
+	const btn = document.getElementById('importSelected');
+	if (btn) btn.disabled = true;
+	if (!file) return;
+	try {
+		const parsed = JSON.parse(await file.text());
+		if (!parsed || typeof parsed !== 'object' || !('demeterExport' in parsed)) {
+			alert('That does not look like a Demeter export file.');
+			return;
+		}
+		window._importData = { frames: parsed.frames || {}, groups: parsed.groups || {} };
+		buildIOTree(document.getElementById('importTree'), window._importData, true);
+		if (btn) btn.disabled = false;
+	} catch (err) {
+		console.error(err);
+		alert('Could not read that file: ' + err.message);
+	}
+}
+
+function doImportSelected() {
+	const tree = document.getElementById('importTree');
+	if (!tree || !window._importData) return;
+	const sel = collectIO(tree, window._importData);
+	if (Object.keys(sel.frames).length === 0 && Object.keys(sel.groups).length === 0) {
+		alert('Nothing selected to import.');
+		return;
+	}
+	backend.send('importData', { frames: sel.frames, groups: sel.groups });
+	const _modal = window.bootstrap && bootstrap.Modal.getInstance(document.getElementById('importPop'));
+	if (_modal) _modal.hide();
+}
+
+function escAttr(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
+function attrSel(s) { return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"'); }
+
+/* First-run generated credentials notice (shown to the desktop admin) */
+
+function showCredentials(notice) {
+	if (!notice || !notice.username) return;
+	if (document.getElementById('credNotice')) return; // already showing
+	const _overlay = document.createElement('div');
+	_overlay.id = 'credNotice';
+	_overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:flex;align-items:center;justify-content:center;';
+	_overlay.innerHTML =
+		`<div class="card p-4" style="min-width:420px;max-width:90vw">` +
+			`<h4>Admin account created</h4>` +
+			`<p class="mb-2">An admin account was generated on first run. Save these credentials somewhere safe, then set a new password.</p>` +
+			`<div class="mb-1"><strong>Username:</strong> <code id="credUser"></code></div>` +
+			`<div class="mb-3"><strong>Password:</strong> <code id="credPass"></code></div>` +
+			`<label class="form-label">New password</label>` +
+			`<input id="credNewPass" class="form-control mb-3" type="password" placeholder="New password">` +
+			`<div class="d-flex gap-2 justify-content-end">` +
+				`<button id="credDismiss" class="btn btn-secondary">Dismiss</button>` +
+				`<button id="credChange" class="btn btn-primary">Change password</button>` +
+			`</div>` +
+		`</div>`;
+	document.body.appendChild(_overlay);
+	// set values via textContent to avoid any HTML injection from the strings
+	document.getElementById('credUser').textContent = notice.username;
+	document.getElementById('credPass').textContent = notice.password;
+	document.getElementById('credDismiss').addEventListener('click', () => {
+		backend.send('dismissNotice');
+		_overlay.remove();
+	});
+	document.getElementById('credChange').addEventListener('click', () => {
+		const pw = document.getElementById('credNewPass').value;
+		if (!pw) return;
+		backend.send('resetPassword', { username: notice.username, password: pw });
+		_overlay.remove();
+	});
 }

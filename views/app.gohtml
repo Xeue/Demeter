@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Demeter</title>
+        <meta name="color-scheme" content="dark">
+        <link type="text/css" rel="stylesheet" href="{{.Static}}/lib/bootstrap.min.css">
+        <link type="text/css" rel="stylesheet" href="{{.Static}}/css/app.css">
+        <link id="favicon_48" rel="icon" href="{{.Static}}/img/icon/icon.svg" sizes="256x256">
+        <script type="text/javascript">
+            const currentSystem = '{{.SystemName}}';
+            const version = '{{.Version}}';
+            const static = '{{.Static}}';
+            const currentUser = '{{.Username}}';
+            const isAdmin = {{if .IsAdmin}}true{{else}}false{{end}};
+            let autoRebootDefault = {{if .AutoRebootDefault}}true{{else}}false{{end}};
+            const commands = {{.Commands}};
+            let firmware;
+        </script>
+        <script type="text/javascript" src="{{.Static}}/lib/jquery-3.6.0.min.js"></script>
+        <script type="text/javascript" src="{{.Static}}/lib/bootstrap.min.js"></script>
+        <script type="text/javascript" src="{{.Static}}/lib/backend-shim.js"></script>
+        <script type="text/javascript" src="{{.Static}}/js/app.js"></script>
+    </head>
+    <body class="{{.Background}} overflow-hidden d-flex flex-column" id="body" data-bs-theme="dark">
+        <nav class="drag navbar navbar-expand-lg navbar-dark bg-title px-2 pe-5 pb-0 m-0 nav nav-tabs">
+            <a class="navbar-brand" href="#">
+                <img src="{{.Static}}/img/icon/icon.svg" class="d-inline-block align-top" alt="" width="30" height="30">
+                Demeter
+            </a>
+            <button class="active nav-link text-light tabSelect" data-tab="frames">Frames</button>
+            <button class="nav-link text-light tabSelect" data-tab="groups">Group Configs</button>
+            {{if .IsAdmin}}<button class="nav-link text-light tabSelect" data-tab="users">Users</button>{{end}}
+            <div class="d-flex m-auto pb-1">
+                <button class="align-self-center btn btn-primary btn-sm h-100" id="importExport" data-bs-toggle="modal" data-bs-target="#importPop">Import/Export</button>
+                <label for="showOffline">Show Offline Cards</label>
+                <div class="align-content-center form-switch">
+                    <input type="checkbox" id="showOffline" class="form-check-input">
+                </div>
+                {{if .IsAdmin}}
+                <label for="globalAutoReboot" class="ms-3" title="Default for all frames: auto-reboot a card after an IP/mode change (per-frame override available)">Auto-reboot (default)</label>
+                <div class="align-content-center form-switch">
+                    <input type="checkbox" id="globalAutoReboot" class="form-check-input" {{if .AutoRebootDefault}}checked{{end}}>
+                </div>
+                {{end}}
+            </div>
+            <span class="navbar-text text-light me-2" title="App version — quote this when reporting issues">v{{.Version}}</span>
+            <span class="navbar-text text-light me-2">{{.Username}}</span>
+            <a class="btn btn-secondary btn-sm" href="/logout">Logout</a>
+        </nav>
+        <main id="demeterCont" class="overflow-hidden">
+            <section class="tab h-100 overflow-auto" data-tab="frames">
+                <div class="p-2 d-flex gap-2">
+                    <button class="btn btn-secondary collapseFrames text-nowrap">Collapse All</button>
+                    <input class="form-control" id="addFrameIP" type="text" placeholder="Frame IP">
+                    <input class="form-control" id="addFrameNumber" type="text" placeholder="Frame Number">
+                    <input class="form-control" id="addFrameName" type="text" placeholder="Frame Name (optional)">
+                    <select class="form-select" id="addFrameGroup" type="text">
+                        <option value="" selected readonly hidden>Select Group (optional)</option>
+                    </select>
+                    <button class="form-control btn btn-primary" id="addFrameIPBtn">Add</button>
+                </div>
+                <article id="framesCont"></article>
+            </section>
+            <section class="tab h-100 overflow-auto d-none" data-tab="groups">
+                <div class="p-2 d-flex">
+                    <input class="form-control me-2" id="addGroup" type="text" placeholder="Group Name">
+                    <button class="form-control btn btn-primary me-2" id="addGroupBtn">Add</button>
+                </div>
+                <article id="groupCont"></article>
+            </section>
+            {{if .IsAdmin}}
+            <section class="tab h-100 overflow-auto d-none" data-tab="users">
+                <div class="p-2 d-flex gap-2">
+                    <input class="form-control" id="addUserName" type="text" placeholder="Username">
+                    <input class="form-control" id="addUserPass" type="password" placeholder="Password">
+                    <select class="form-select w-auto" id="addUserRole">
+                        <option value="operator">operator</option>
+                        <option value="admin">admin</option>
+                    </select>
+                    <button class="btn btn-primary text-nowrap" id="addUserBtn">Add User</button>
+                </div>
+                <article id="usersCont" class="p-2"></article>
+            </section>
+            {{end}}
+            <section id="logs" class="h-100 overflow-auto tab d-none"></section>
+        </main>
+        <article id="importPop" class="modal fade" tabindex="-1">
+            <section class="modal-dialog modal-xl modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 class="me-3">Import / Export</h3>
+                        <ul class="nav nav-tabs">
+                            <li class="nav-item"><button class="nav-link active ioTab" data-iotab="export">Export</button></li>
+                            <li class="nav-item"><button class="nav-link ioTab" data-iotab="import">Import</button></li>
+                        </ul>
+                        <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- Export -->
+                        <div class="ioPane" data-iotab="export">
+                            <p class="text-muted small mb-2">Tick the frames, cards and groups to export — ticking a group also ticks every frame assigned to it. Frames, cards and groups are all saved to one file.</p>
+                            <div class="d-flex gap-2 mb-2">
+                                <button class="btn btn-sm btn-secondary ioSelectAll">Select all</button>
+                                <button class="btn btn-sm btn-secondary ioSelectNone">Select none</button>
+                                <button class="btn btn-primary ms-auto" id="exportSelected">Export selected</button>
+                            </div>
+                            <div id="exportTree" class="ioTree"></div>
+                        </div>
+                        <!-- Import -->
+                        <div class="ioPane d-none" data-iotab="import">
+                            <div class="d-flex gap-2 mb-2 align-items-center">
+                                <input class="form-control" id="importFile" type="file" accept="application/json,.json">
+                                <button class="btn btn-sm btn-secondary ioSelectAll">Select all</button>
+                                <button class="btn btn-sm btn-secondary ioSelectNone">Select none</button>
+                                <button class="btn btn-primary ms-auto" id="importSelected" disabled>Import selected</button>
+                            </div>
+                            <p class="text-muted small mb-2">Choose an exported file, tick what to import, then Import. Importing restores configuration and never turns blasting on — enable frames manually afterwards.</p>
+                            <div id="importTree" class="ioTree"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </article>
+    </body>
+</html>

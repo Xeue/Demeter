@@ -404,6 +404,22 @@ header:has(.collapseHeader:checked) + .collapseSection {
    background: #5b1b1b;
 }
 
+.slotCont.staged > header {
+   background: #4a3a13;
+}
+
+/* A control whose SET was rejected by the device after the verify-and-retry.
+   Distinct from the normal red "differs": an amber dashed ring + ⚠ marker. */
+.commandCont.cmdFailed .commandRead {
+   outline: 2px dashed #ffae00;
+   outline-offset: 1px;
+}
+
+.commandCont.cmdFailed .commandName::after {
+   content: " ⚠";
+   color: #ffae00;
+}
+
 .form-switch:has(.commandEnabled:not(:checked)) ~.commandInput {
    color: dimgrey;
    opacity: 0.5;
@@ -469,3 +485,41 @@ header:has(.collapseHeader:checked) + .collapseSection {
 [data-slot="18"] {grid-area:18;}
 [data-slot="19"] {grid-area:19;}
 [data-slot="20"] {grid-area:20;}
+/* Reboot-needed indicator: amber chip next to the Reboot button. The pulse
+   draws the eye; the title attribute carries the reasons as a tooltip. */
+.rebootNeeded {
+	cursor: help;
+	animation: rebootPulse 1.6s ease-in-out infinite;
+}
+@keyframes rebootPulse {
+	0%, 100% { opacity: 1; }
+	50%      { opacity: 0.55; }
+}
+
+/* Import/Export selection tree */
+.ioTree {
+	max-height: 55vh;
+	overflow-y: auto;
+	border: 1px solid rgba(255,255,255,0.12);
+	border-radius: .375rem;
+	padding: .5rem .75rem;
+}
+.ioSection {
+	font-weight: 600;
+	opacity: .7;
+	margin: .5rem 0 .25rem;
+	text-transform: uppercase;
+	font-size: .8rem;
+}
+.ioSection:first-child { margin-top: 0; }
+.ioRow {
+	display: flex;
+	align-items: center;
+	gap: .5rem;
+	padding: .15rem 0;
+	cursor: pointer;
+}
+.ioRow input { cursor: pointer; }
+.ioFrame { font-weight: 500; margin-top: .25rem; }
+.ioSlot { padding-left: 1.75rem; opacity: .9; }
+.ioGroup { padding-left: .25rem; }
