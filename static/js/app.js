@@ -62,6 +62,10 @@ document.addEventListener('DOMContentLoaded', () => {
 		const frameIP = _element.closest('.frameCont').getAttribute('data-ip');
 		removeCard(frameIP, slot);
 	})
+	on('click', '.cardRetry', _element => {
+		const frameIP = _element.closest('.frameCont').getAttribute('data-ip');
+		backend.send('pollNow', { ip: frameIP });
+	})
 	on('click', '#showOffline', _element => {
 		const _body = document.getElementById('body');
 		if (_element.checked) {
@@ -110,6 +114,14 @@ document.addEventListener('DOMContentLoaded', () => {
 	const _globalAR = document.getElementById('globalAutoReboot');
 	if (_globalAR) _globalAR.addEventListener('change', () => {
 		backend.send('setGlobalAutoReboot', { enabled: _globalAR.checked });
+	});
+	const _scanInterval = document.getElementById('scanInterval');
+	if (_scanInterval) _scanInterval.addEventListener('change', () => {
+		let s = parseInt(_scanInterval.value, 10);
+		if (isNaN(s)) return;
+		s = Math.min(3600, Math.max(1, s));
+		_scanInterval.value = s; // reflect clamping
+		backend.send('setScanInterval', { seconds: s });
 	});
 
 	/* Group controls */
@@ -328,6 +340,7 @@ function applySlotInfo(slotInfo) {
 				<button class="cardReboot btn btn-secondary btn-sm">Reboot</button>
 				<span class="stagedBadge badge bg-warning text-dark ms-1 d-none">Expected</span>
 				<button class="cardRemove btn btn-outline-danger btn-sm ms-1 d-none">Remove</button>
+				<button class="cardRetry btn btn-warning btn-sm ms-1 d-none" title="Re-scan and re-push this frame now to retry controls that didn't apply">Retry</button>
 			</header>`);
 		} else {
 			const _iface1 = _slotCont.querySelector('.card1Iface')
@@ -501,6 +514,9 @@ function markFailures(_slotCont, failed) {
 		const _r = _c.querySelector('.commandRead');
 		if (_r) _r.setAttribute('title', failed[cmd]);
 	}
+	// Offer a Retry button on the card whenever it has any unapplied controls.
+	const _retry = _slotCont.querySelector('.cardRetry');
+	if (_retry) _retry.classList.toggle('d-none', Object.keys(failed).length === 0);
 }
 
 function doFrameStatus(data) {

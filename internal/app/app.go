@@ -87,7 +87,13 @@ func Build(ctx context.Context, cfg config.Config, workers int) (*App, error) {
 			}
 		},
 	}
-	mgr := manager.New(ctx, scanner, device.RollcallDialer{}, st, h, st.Frames(), st.Groups(), 3*time.Second, autoOpts)
+	mgr := manager.New(ctx, scanner, device.RollcallDialer{}, st, h, st.Frames(), st.Groups(), cfg.ScanInterval(), autoOpts)
+	mgr.SetIntervalPersister(func(seconds int) {
+		cfg.ScanIntervalSeconds = seconds
+		if err := cfg.Save(); err != nil {
+			slog.Warn("persist scan interval failed", "err", err)
+		}
+	})
 	h.SetEngine(mgr)
 
 	srv, err := web.NewServer(cfg, version(), a, h)

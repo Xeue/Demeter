@@ -21,6 +21,9 @@ type Engine interface {
 	ScanFrame(ip string, scanOn bool)
 	EnableSlot(ip, slot string, enabled bool)
 	Reboot(ip, slot string)
+	PollNow(ip string)
+	ScanIntervalSeconds() int
+	SetScanInterval(seconds int)
 	SetAutoReboot(ip, mode string)
 	SetGlobalAutoReboot(enabled bool)
 	StageCard(ip, slot string)
@@ -77,6 +80,15 @@ func (h *Hub) GlobalAutoReboot() bool {
 		return false
 	}
 	return h.engine.GlobalAutoReboot()
+}
+
+// ScanIntervalSeconds reports the current global scan interval (for the page
+// bootstrap). 3 if no engine is wired.
+func (h *Hub) ScanIntervalSeconds() int {
+	if h.engine == nil {
+		return 3
+	}
+	return h.engine.ScanIntervalSeconds()
 }
 
 // Run is the hub's event loop.

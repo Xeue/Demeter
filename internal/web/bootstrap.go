@@ -16,6 +16,7 @@ type pageData struct {
 	Username          string
 	IsAdmin           bool
 	AutoRebootDefault bool
+	ScanInterval      int
 	Commands          template.JS
 }
 
@@ -27,6 +28,7 @@ func (s *Server) renderApp(w http.ResponseWriter, r *http.Request) {
 		SystemName:        s.cfg.SystemName,
 		Version:           s.version,
 		AutoRebootDefault: s.hub.GlobalAutoReboot(),
+		ScanInterval:      s.hub.ScanIntervalSeconds(),
 		Commands:          template.JS(commandsdb.RawJSON()),
 	}
 	if sess != nil {

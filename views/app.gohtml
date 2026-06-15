@@ -41,6 +41,9 @@
                 <div class="align-content-center form-switch">
                     <input type="checkbox" id="globalAutoReboot" class="form-check-input" {{if .AutoRebootDefault}}checked{{end}}>
                 </div>
+                <label for="scanInterval" class="ms-3" title="Global scan/blast poll interval in seconds. Increase to back off polling on large systems.">Scan every</label>
+                <input type="number" id="scanInterval" class="form-control form-control-sm ms-1" style="width:5rem" min="1" max="3600" value="{{.ScanInterval}}" title="Seconds between scans (1–3600)">
+                <span class="navbar-text text-light ms-1">s</span>
                 {{end}}
             </div>
             <span class="navbar-text text-light me-2" title="App version — quote this when reporting issues">v{{.Version}}</span>

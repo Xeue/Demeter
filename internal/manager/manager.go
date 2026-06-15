@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Xeue/Demeter/internal/config"
 	"github.com/Xeue/Demeter/internal/device"
 	"github.com/Xeue/Demeter/internal/frame"
 	"github.com/Xeue/Demeter/internal/model"
@@ -43,9 +44,11 @@ type Manager struct {
 	dialer       device.Dialer
 	store        Persister
 	bcast        Broadcaster
-	pollInterval time.Duration
+	pollInterval time.Duration      // guarded by mu
+	intervalCh   chan time.Duration // tells a running pollLoop to reset its ticker
 
-	auto AutoRebootOptions
+	auto            AutoRebootOptions
+	persistInterval func(seconds int) // nil-safe; persists a runtime interval change
 
 	mu                sync.Mutex
 	actors            map[string]*frame.Actor
@@ -66,6 +69,7 @@ func New(ctx context.Context, scanner *scan.Scanner, dialer device.Dialer, store
 	m := &Manager{
 		ctx: ctx, scanner: scanner, dialer: dialer, store: store, bcast: bcast,
 		pollInterval:      pollInterval,
+		intervalCh:        make(chan time.Duration, 1),
 		auto:              auto,
 		actors:            map[string]*frame.Actor{},
 		framesView:        map[string]*model.Frame{},
@@ -90,12 +94,17 @@ func (m *Manager) Start() {
 }
 
 func (m *Manager) pollLoop() {
-	t := time.NewTicker(m.pollInterval)
+	m.mu.Lock()
+	d := m.pollInterval
+	m.mu.Unlock()
+	t := time.NewTicker(d)
 	defer t.Stop()
 	for {
 		select {
 		case <-m.ctx.Done():
 			return
+		case nd := <-m.intervalCh:
+			t.Reset(nd) // global scan interval changed at runtime
 		case <-t.C:
 			m.mu.Lock()
 			actors := make([]*frame.Actor, 0, len(m.actors))
@@ -245,6 +254,15 @@ func (m *Manager) Reboot(ip, slot string) {
 	}
 }
 
+// PollNow triggers an immediate scan + blast of a frame (operator "try again"),
+// re-reading and re-pushing any still-failing controls without waiting for the
+// next poll tick.
+func (m *Manager) PollNow(ip string) {
+	if a := m.actor(ip); a != nil {
+		a.PollNow()
+	}
+}
+
 // SetAutoReboot sets a frame's per-frame auto-reboot override ("", "on", "off").
 func (m *Manager) SetAutoReboot(ip, mode string) {
 	switch mode {
@@ -254,6 +272,35 @@ func (m *Manager) SetAutoReboot(ip, mode string) {
 	}
 	if a := m.actor(ip); a != nil {
 		a.SetAutoReboot(mode)
+	}
+}
+
+// SetIntervalPersister sets the callback used to persist a runtime scan-interval
+// change (nil-safe). Called once at wiring time.
+func (m *Manager) SetIntervalPersister(fn func(seconds int)) { m.persistInterval = fn }
+
+// ScanIntervalSeconds returns the current global scan interval in seconds.
+func (m *Manager) ScanIntervalSeconds() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return int(m.pollInterval / time.Second)
+}
+
+// SetScanInterval changes the global scan/blast poll interval (seconds, clamped),
+// resets the running ticker, and persists it. Used to back off polling on large
+// systems.
+func (m *Manager) SetScanInterval(seconds int) {
+	seconds = config.ClampScanInterval(seconds)
+	d := time.Duration(seconds) * time.Second
+	m.mu.Lock()
+	m.pollInterval = d
+	m.mu.Unlock()
+	select {
+	case m.intervalCh <- d: // nudge the running pollLoop to reset its ticker
+	default:
+	}
+	if m.persistInterval != nil {
+		m.persistInterval(seconds)
 	}
 }
 

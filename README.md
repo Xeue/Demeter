@@ -52,17 +52,27 @@ webview (WebView2 on Windows, WebKit on macOS/Linux). It's the same Go binary
 family — no Rust/Tauri toolchain — and auto-logs-in over loopback so there's no
 login prompt.
 
-- Build (needs CGO + the system webview headers): `make desktop` (or `CGO_ENABLED=1 go build -tags desktop -o demeter-desktop ./cmd/demeter-desktop`)
+- Build (needs CGO + the system webview headers): `make desktop` — outputs `Demeter-v<version>` (`.exe` on a Windows host).
 - Windows needs the WebView2 runtime (preinstalled on Win11; Evergreen installer on Win10).
 - The plain `go build ./cmd/demeter` server build stays pure-Go static and is unaffected.
 - If `go mod tidy` drops the webview dep, re-add it: `go get github.com/webview/webview_go`.
 
+Desktop artifacts are named `Demeter-v<version>` with a platform-appropriate
+extension (the version comes from the `VERSION` file):
+
+| Target | Output |
+|---|---|
+| `make desktop` | `Demeter-v2.0.0` (host OS; `.exe` on Windows) |
+| `make desktop-windows` | `Demeter-v2.0.0.exe` |
+| `make desktop-macapp` | `Demeter-v2.0.0.app` |
+
 **Launching without a terminal window:**
-- **Windows:** `make desktop-windows` builds with `-ldflags="-H windowsgui"`, so the
-  `.exe` opens only the webview window (no console). Logs still go to the log file.
-- **macOS:** `make desktop-macapp` produces `Demeter.app` — double-click it (or
-  `open Demeter.app`) and Finder launches it with no Terminal. See
-  `packaging/macos/Info.plist`.
+- **Windows:** `make desktop-windows` builds `Demeter-v<version>.exe` with
+  `-ldflags="-H windowsgui"`, so it opens only the webview window (no console).
+  Logs still go to the log file.
+- **macOS:** `make desktop-macapp` produces `Demeter-v<version>.app` — double-click
+  it (or `open Demeter-v<version>.app`) and Finder launches it with no Terminal.
+  See `packaging/macos/Info.plist`.
 
 See the [Makefile](Makefile) for all build targets (`server`, `desktop`,
 `server-windows`, `desktop-windows`, `desktop-macapp`, `server-linux`).

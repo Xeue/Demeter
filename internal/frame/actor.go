@@ -66,6 +66,7 @@ type enableSlotMsg struct {
 	enabled bool
 }
 type rebootMsg struct{ slot string }
+type pollNowMsg struct{} // operator-triggered immediate scan + blast (retry)
 type stageCardMsg struct{ slot string }
 type removeCardMsg struct{ slot string }
 type setAutoRebootMsg struct{ mode string } // "" inherit / "on" / "off"
@@ -87,9 +88,10 @@ type Actor struct {
 	in   chan any
 	done chan struct{}
 
-	inflight   bool
-	gen        uint64
-	scanCancel context.CancelFunc
+	inflight     bool
+	rescanQueued bool // an operator asked to scan/blast now while a scan was in flight
+	gen          uint64
+	scanCancel   context.CancelFunc
 
 	now            func() time.Time
 	lastAutoReboot map[string]time.Time
@@ -122,6 +124,7 @@ func (a *Actor) ApplyConfig(number, name, group, typ string) {
 	a.send(applyConfig{number, name, group, typ})
 }
 func (a *Actor) Reboot(slot string)              { a.send(rebootMsg{slot}) }
+func (a *Actor) PollNow()                        { a.send(pollNowMsg{}) }
 func (a *Actor) StageCard(slot string)           { a.send(stageCardMsg{slot}) }
 func (a *Actor) RemoveCard(slot string)          { a.send(removeCardMsg{slot}) }
 func (a *Actor) SetAutoReboot(mode string)       { a.send(setAutoRebootMsg{mode}) }
@@ -177,6 +180,8 @@ func (a *Actor) run(ctx context.Context) {
 			switch v := m.(type) {
 			case pollTick:
 				a.handlePoll(ctx)
+			case pollNowMsg:
+				a.handlePollNow(ctx)
 			case scanResultMsg:
 				a.handleScanResult(ctx, v)
 			case applyConfig:
@@ -229,6 +234,17 @@ func (a *Actor) run(ctx context.Context) {
 	}
 }
 
+// handlePollNow is the operator "scan/blast now" (retry). If a scan is already
+// in flight it can't just be dropped like a routine tick — the operator wants a
+// fresh attempt — so we queue one to run the instant the current scan finishes.
+func (a *Actor) handlePollNow(ctx context.Context) {
+	if a.inflight {
+		a.rescanQueued = true
+		return
+	}
+	a.handlePoll(ctx)
+}
+
 func (a *Actor) handlePoll(ctx context.Context) {
 	if a.inflight {
 		return // a scan is already running; drop the tick (replaces the `done` gate)
@@ -262,6 +278,10 @@ func (a *Actor) handleScanResult(ctx context.Context, v scanResultMsg) {
 	a.maybeAutoReboot(ctx)
 	a.conns.Prune(connIdleTTL) // drop the old IP after a card's IP changed
 	a.changed()
+	if a.rescanQueued {
+		a.rescanQueued = false
+		a.handlePoll(ctx) // operator requested a retry while this scan was running
+	}
 }
 
 // effectiveAutoReboot resolves the per-frame override against the global default.
@@ -310,7 +330,8 @@ func (a *Actor) cancelScan() {
 		a.scanCancel = nil
 	}
 	a.inflight = false
-	a.gen++ // any in-flight result now carries a stale gen and will be discarded
+	a.rescanQueued = false // a reconfigure supersedes a pending manual retry
+	a.gen++                // any in-flight result now carries a stale gen and will be discarded
 }
 
 func (a *Actor) cleanup() {

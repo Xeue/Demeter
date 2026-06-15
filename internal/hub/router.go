@@ -61,6 +61,13 @@ func (r *Router) dispatch(c *Client, env Envelope) {
 		}
 		mustJSON(env.Data, &d)
 		e.ScanFrame(d.IP, d.Scan)
+	case "pollNow":
+		// Operator "try again": immediate scan + blast of the frame (audited, as
+		// it can re-push to live hardware).
+		var d struct{ IP string }
+		mustJSON(env.Data, &d)
+		e.PollNow(d.IP)
+		c.audit("pollNow", d)
 	case "stageCard":
 		var d struct{ IP, Slot string }
 		mustJSON(env.Data, &d)
@@ -95,6 +102,15 @@ func (r *Router) dispatch(c *Client, env Envelope) {
 		c.audit("setAutoReboot", d)
 
 	// --- global policy (admin only, audited) ---
+	case "setScanInterval":
+		if !c.requireRole(auth.RoleAdmin) {
+			c.audit("setScanInterval.denied", env.Command)
+			return
+		}
+		var d struct{ Seconds int }
+		mustJSON(env.Data, &d)
+		e.SetScanInterval(d.Seconds)
+		c.audit("setScanInterval", d)
 	case "setGlobalAutoReboot":
 		if !c.requireRole(auth.RoleAdmin) {
 			c.audit("setGlobalAutoReboot.denied", env.Command)

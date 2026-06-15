@@ -26,6 +26,10 @@ type Config struct {
 	AutoReboot                bool `json:"autoReboot"`
 	AutoRebootCooldownSeconds int  `json:"autoRebootCooldownSeconds"`
 
+	// ScanIntervalSeconds is the global scan/blast poll interval. Back it off on
+	// large systems to reduce load. Clamped to [1, 3600] (see ScanInterval).
+	ScanIntervalSeconds int `json:"scanIntervalSeconds"`
+
 	// Not persisted (set from flags/env).
 	DataDir string `json:"-"`
 	TLSCert string `json:"-"`
@@ -42,6 +46,7 @@ func Defaults() Config {
 		ListenAddr:                ":8080",
 		AutoReboot:                false,
 		AutoRebootCooldownSeconds: 120,
+		ScanIntervalSeconds:       3,
 	}
 }
 
@@ -52,6 +57,32 @@ func (c Config) AutoRebootCooldown() time.Duration {
 		s = 120
 	}
 	return time.Duration(s) * time.Second
+}
+
+// ScanIntervalBounds is the allowed range (seconds) for the global scan interval.
+const (
+	ScanIntervalMin = 1
+	ScanIntervalMax = 3600
+)
+
+// ClampScanInterval clamps a seconds value into the allowed range, defaulting a
+// zero/unset value to 3s.
+func ClampScanInterval(seconds int) int {
+	if seconds <= 0 {
+		seconds = 3
+	}
+	if seconds < ScanIntervalMin {
+		seconds = ScanIntervalMin
+	}
+	if seconds > ScanIntervalMax {
+		seconds = ScanIntervalMax
+	}
+	return seconds
+}
+
+// ScanInterval returns the poll interval as a duration (clamped).
+func (c Config) ScanInterval() time.Duration {
+	return time.Duration(ClampScanInterval(c.ScanIntervalSeconds)) * time.Second
 }
 
 // Load reads dataDir/config.json, migrating dataDir/config.conf if present and
