@@ -263,6 +263,14 @@ func (m *Manager) PollNow(ip string) {
 	}
 }
 
+// ApplyNow force-blasts a frame's pending diff once (operator "Apply changes" in
+// Scan-only mode) without flipping the frame into permanent Scan & blast.
+func (m *Manager) ApplyNow(ip string) {
+	if a := m.actor(ip); a != nil {
+		a.ApplyNow()
+	}
+}
+
 // SetAutoReboot sets a frame's per-frame auto-reboot override ("", "on", "off").
 func (m *Manager) SetAutoReboot(ip, mode string) {
 	switch mode {

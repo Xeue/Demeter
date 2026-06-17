@@ -32,6 +32,31 @@ document.addEventListener('DOMContentLoaded', () => {
 	on('click', '.tabSelect', showTab)
 	on('click', '#addFrameIPBtn', addFrame);
 	on('click', '#addGroupBtn', addGroup);
+
+	// Fleet sidebar + apply flow.
+	// closest() so clicks on the inner text/badge of a rail item or section button work.
+	document.addEventListener('click', e => {
+		const item = e.target.closest('.railItem');
+		if (item) { selectFrame(item.getAttribute('data-ip')); return; }
+		const col = e.target.closest('.secCollapse');
+		if (col) { toggleSection(col.closest('.secHead'), false); return; }
+		const exp = e.target.closest('.secExpand');
+		if (exp) { toggleSection(exp.closest('.secHead'), true); return; }
+	});
+	const _frameSearch = document.getElementById('frameSearch');
+	if (_frameSearch) _frameSearch.addEventListener('input', renderRail);
+	on('click', '.applyBtn .go', _el => backend.send('applyFrame', { ip: _el.closest('.frameCont').getAttribute('data-ip') }));
+	on('click', '.applyBtn .num', _el => openChangesPop(_el.closest('.frameCont').getAttribute('data-ip'), _el));
+	// Settings popover (global display/scan controls).
+	const _settingsBtn = document.getElementById('settingsBtn');
+	const _settingsMenu = document.getElementById('settingsMenu');
+	if (_settingsBtn && _settingsMenu) {
+		_settingsBtn.addEventListener('click', e => { e.stopPropagation(); _settingsMenu.classList.toggle('d-none'); });
+	}
+	document.addEventListener('click', e => {
+		if (_settingsMenu && !_settingsMenu.classList.contains('d-none') && !_settingsMenu.contains(e.target) && e.target !== _settingsBtn) _settingsMenu.classList.add('d-none');
+		if (_changesPopEl && !_changesPopEl.contains(e.target) && !e.target.closest('.applyBtn')) closeChangesPop();
+	});
 	on('click', '#clearLogs', () => { document.getElementById('logs').innerHTML = ''; });
 	on('change', '#logLevelFilter', applyLogFilter);
 	on('input', '#logTextFilter', applyLogFilter);
@@ -138,6 +163,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	backend.send('getFrames')
 	backend.send('getGroups')
+
+	// Optional deep-link to a tab, e.g. #groups / #logs / #users.
+	const _hashTab = location.hash.replace('#', '');
+	if (_hashTab) {
+		const _t = document.querySelector(`.tabSelect[data-tab="${_hashTab}"]`);
+		if (_t) showTab(_t);
+	}
 });
 
 function checkDeps(_cont) {
@@ -201,8 +233,12 @@ function removeCard(frameIP, slot) {
 	const frame = window.frames && window.frames[frameIP];
 	if (frame && frame.slots) delete frame.slots[slot];
 	delete _slotRenderCache[frameIP + '|' + slot];
-	const _slotCont = document.querySelector(`#framesCont [data-ip="${frameIP}"] [data-slot="${slot}"]`);
+	const _slotCont = document.querySelector(`#frameDetail [data-ip="${frameIP}"] [data-slot="${slot}"]`);
 	if (_slotCont) _slotCont.remove();
+}
+
+function frameOrder(frames) {
+	return Object.keys(frames).sort((a, b) => (Number(frames[a].number) || 0) - (Number(frames[b].number) || 0) || a.localeCompare(b));
 }
 
 function drawFrames(frames) {
@@ -211,13 +247,14 @@ function drawFrames(frames) {
 	if (window.deletedFrames) {
 		for (const frameIP in frames) window.deletedFrames.delete(frameIP);
 	}
-	const _framesCont = document.getElementById('framesCont');
-	_framesCont.innerHTML = '';
+	const _detail = document.getElementById('frameDetail');
+	_detail.innerHTML = '';
 	// The slot DOM was just wiped, so the per-slot render cache is stale.
 	for (const k in _slotRenderCache) delete _slotRenderCache[k];
-	for (const frameIP in frames) {
+	const ips = frameOrder(frames);
+	for (const frameIP of ips) {
 		const _frame = drawFrame(frames[frameIP]);
-		_framesCont.append(_frame);
+		_detail.append(_frame);
 		// Render known/staged slots from frame data so pre-configured (and
 		// last-known) cards show without waiting for the next live scan.
 		const _slots = frames[frameIP].slots || {};
@@ -225,53 +262,243 @@ function drawFrames(frames) {
 			applySlotInfo({ frame: frames[frameIP], slotName: slotName, slot: _slots[slotName] });
 		}
 	}
+	renderRail();
+	// Establish / preserve the selected frame.
+	if (!window.selectedFrame || !frames[window.selectedFrame]) window.selectedFrame = ips[0] || null;
+	if (window.selectedFrame) selectFrame(window.selectedFrame);
+	else _detail.innerHTML = '<div class="detailEmpty">No frames yet — add one on the left</div>';
+}
+
+// renderRail builds the fleet sidebar from window.frames: status square, name/IP,
+// and a pending-change count badge per frame.
+function renderRail() {
+	const _list = document.getElementById('railList');
+	if (!_list) return;
+	const frames = window.frames || {};
+	const _search = document.getElementById('frameSearch');
+	const q = (_search ? _search.value : '').toLowerCase();
+	let online = 0, toApply = 0;
+	_list.innerHTML = '';
+	for (const ip of frameOrder(frames)) {
+		const f = frames[ip];
+		if (!f.offline) online++;
+		const pend = framePending(ip);
+		if (pend > 0) toApply++;
+		if (q && !(`f${f.number} ${f.name} ${ip} ${f.group}`.toLowerCase().includes(q))) continue;
+		const _it = document.createElement('div');
+		_it.className = 'railItem' + (ip === window.selectedFrame ? ' active' : '');
+		_it.setAttribute('data-ip', ip);
+		const badge = pend > 0 ? `<span class="rt count warn">${pend}</span>` : `<span class="rt count ok">0</span>`;
+		_it.innerHTML = `<span class="sq ${f.offline ? 'off' : 'ok'}"></span>` +
+			`<div><div class="nm">F${escapeHTML(f.number || '')} · ${escapeHTML(f.name || '')}</div>` +
+			`<div class="ip">${escapeHTML(ip)}</div></div>${badge}`;
+		_list.append(_it);
+	}
+	const _sum = document.getElementById('railSummary');
+	if (_sum) _sum.textContent = `${online} online · ${toApply} to apply`;
+}
+
+function selectFrame(ip) {
+	window.selectedFrame = ip;
+	document.querySelectorAll('#frameDetail .frameCont').forEach(_f =>
+		_f.classList.toggle('selected', _f.getAttribute('data-ip') === ip));
+	document.querySelectorAll('#railList .railItem').forEach(_r =>
+		_r.classList.toggle('active', _r.getAttribute('data-ip') === ip));
+}
+
+// framePending approximates the count of settings that would be written: rows
+// whose on-device value differs from target (.commandRead.bg-danger) within a
+// frame's blast-eligible (enabled, online) slots.
+function framePending(ip) {
+	const _f = document.querySelector(`#frameDetail .frameCont[data-ip="${attrSel(ip)}"]`);
+	if (!_f) return 0;
+	let n = 0;
+	_f.querySelectorAll('.slotCont').forEach(_s => {
+		if (_s.classList.contains('offline')) return;
+		const en = _s.querySelector('.slotEnable');
+		if (en && !en.checked) return;
+		_s.querySelectorAll('.commandCont').forEach(_c => { if (isPending(_c)) n++; });
+	});
+	return n;
+}
+
+// isPending: a row will actually be written when it differs from the device
+// (.bg-danger) AND it is managed — an enabled per-card override, or a group that
+// supplies a target value (so a mere difference from a default doesn't count).
+function isPending(_c) {
+	const _read = _c.querySelector('.commandRead');
+	if (!_read || !_read.classList.contains('bg-danger')) return false;
+	const ov = _c.querySelector('.commandEnabled');
+	const grp = _c.querySelector('.commandComputed');
+	return (ov && ov.checked) || (grp && grp.textContent.trim() !== '');
+}
+
+// updateApply shows the "Apply changes [N]" button when a frame is in Scan-only
+// mode with pending changes, and refreshes its count.
+function updateApply(ip) {
+	const _f = document.querySelector(`#frameDetail .frameCont[data-ip="${attrSel(ip)}"]`);
+	if (!_f) return;
+	const f = (window.frames || {})[ip] || {};
+	const scanOnly = f.scan && !f.enabled;
+	const pend = framePending(ip);
+	const _ab = _f.querySelector('.applyBtn');
+	if (_ab) {
+		_ab.classList.toggle('d-none', !(scanOnly && pend > 0));
+		const _num = _ab.querySelector('.num');
+		if (_num) _num.textContent = pend + ' ▾';
+	}
+}
+
+function updateApplyAll() {
+	for (const ip in (window.frames || {})) updateApply(ip);
+}
+
+// sectionHeadHTML renders a "Card Settings" / "Spigots" section header with
+// Expand-all / Collapse-all controls that act on that section's groups only.
+function sectionHeadHTML(sec, title) {
+	return `<header class="secHead" data-sec="${sec}"><h4>${title}</h4>` +
+		`<div class="secActions"><button class="btn btn-secondary btn-sm secExpand">Expand all</button>` +
+		`<button class="btn btn-secondary btn-sm secCollapse">Collapse all</button></div></header>`;
+}
+
+function toggleSection(headEl, expand) {
+	if (!headEl) return;
+	const slot = headEl.closest('.slotCont');
+	const sec = headEl.getAttribute('data-sec');
+	if (!slot) return;
+	slot.querySelectorAll(`.groupCont[data-section="${sec}"]`).forEach(g => {
+		g.querySelectorAll('.collapseHeader').forEach(c => { c.checked = expand; });
+	});
+}
+
+function autoEnableRow(_element) {
+	const _cont = _element.closest('.commandCont');
+	const _en = _cont && _cont.querySelector('.commandEnabled');
+	if (_en && !_en.checked) _en.checked = true;
+}
+
+// recomputeRow refreshes a row's match status (calm green/amber) immediately from
+// its target vs on-device value, so an edit flags as pending without waiting for
+// the next scan. The next slotInfo re-confirms it authoritatively.
+function recomputeRow(_cont) {
+	const _read = _cont.querySelector('.commandRead');
+	if (!_read) return;
+	const current = _read.getAttribute('data-raw');
+	const type = _cont.getAttribute('data-type');
+	let target;
+	if (type === 'boolean') { const i = _cont.querySelector('.commandInput'); target = i && i.checked ? '1' : '0'; }
+	else if (type === 'smartip') target = Array.from(_cont.querySelectorAll('.octet')).map(o => o.value).join('.');
+	else if (type === 'select') { const s = _cont.querySelector('select.commandInput'); target = s ? s.value : ''; }
+	else { const i = _cont.querySelector('.commandInput'); target = i ? i.value : ''; }
+	_read.classList.remove('bg-success', 'bg-danger');
+	if (current === null || current === undefined || current === '') return;
+	_read.classList.add(String(target) === String(current) ? 'bg-success' : 'bg-danger');
+}
+
+function afterEdit(_element) {
+	const _cont = _element.closest('.commandCont');
+	if (_cont) recomputeRow(_cont);
+	const _f = _element.closest('.frameCont');
+	if (_f) { renderRail(); updateApply(_f.getAttribute('data-ip')); }
+}
+
+// readTargetFromRow renders the target value a command row would write.
+function readTargetFromRow(_c) {
+	const type = _c.getAttribute('data-type');
+	if (type === 'boolean') { const i = _c.querySelector('.commandInput'); return i && i.checked ? 'True' : 'False'; }
+	if (type === 'select') { const s = _c.querySelector('select.commandInput'); return s && s.options[s.selectedIndex] ? s.options[s.selectedIndex].text : ''; }
+	if (type === 'smartip') return Array.from(_c.querySelectorAll('.octet')).map(o => o.value).join('.');
+	const i = _c.querySelector('.commandInput');
+	return i ? i.value : '';
+}
+
+// gatherChanges collects the pending diffs for a frame from the rendered rows.
+function gatherChanges(ip) {
+	const out = [];
+	const _f = document.querySelector(`#frameDetail .frameCont[data-ip="${attrSel(ip)}"]`);
+	if (!_f) return out;
+	_f.querySelectorAll('.slotCont').forEach(_s => {
+		if (_s.classList.contains('offline')) return;
+		const en = _s.querySelector('.slotEnable');
+		if (en && !en.checked) return;
+		const slot = _s.getAttribute('data-slot');
+		_s.querySelectorAll('.commandCont').forEach(_c => {
+			if (!isPending(_c)) return;
+			const _read = _c.querySelector('.commandRead');
+			const ov = _c.querySelector('.commandEnabled');
+			out.push({
+				slot,
+				name: _c.getAttribute('data-name') || '',
+				current: (_read.textContent || '').replace(/^[●▸]\s*/, '').trim() || '—',
+				target: readTargetFromRow(_c),
+				source: ov && ov.checked ? 'Override' : 'Group',
+			});
+		});
+	});
+	return out;
+}
+
+let _changesPopEl = null;
+function closeChangesPop() { if (_changesPopEl) { _changesPopEl.remove(); _changesPopEl = null; } }
+
+// openChangesPop shows the pending-changes table anchored under the [N] count.
+function openChangesPop(ip, anchor) {
+	closeChangesPop();
+	const f = (window.frames || {})[ip] || {};
+	const changes = gatherChanges(ip);
+	const rows = changes.map(c =>
+		`<tr><td>Slot ${escapeHTML(c.slot)} · ${escapeHTML(c.name)}</td>` +
+		`<td class="v">${escapeHTML(c.current)}</td>` +
+		`<td class="v"><span class="arrow">→</span><span class="to">${escapeHTML(c.target)}</span></td>` +
+		`<td><span class="chip ${c.source === 'Override' ? 'warn' : ''}">${c.source}</span></td></tr>`).join('');
+	const el = document.createElement('div');
+	el.className = 'changesPop';
+	el.innerHTML = `<header>Pending changes — F${escapeHTML(f.number || '')} ${escapeHTML(f.name || '')}<button class="x" title="Close">✕</button></header>` +
+		`<div class="body"><table><thead><tr><th>Setting</th><th>On device</th><th>Target</th><th>Source</th></tr></thead>` +
+		`<tbody>${rows || '<tr><td colspan="4" class="muted">No pending changes</td></tr>'}</tbody></table></div>` +
+		`<footer><span class="muted">${changes.length} setting(s) will be written to the card(s)</span>` +
+		`<button class="btn btn-secondary btn-sm xCancel">Cancel</button>` +
+		`<button class="btn btn-primary btn-sm doApply">Apply ${changes.length}</button></footer>`;
+	document.body.append(el);
+	_changesPopEl = el;
+	const r = anchor.getBoundingClientRect();
+	el.style.top = (r.bottom + 6) + 'px';
+	el.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+	el.querySelector('.x').onclick = closeChangesPop;
+	el.querySelector('.xCancel').onclick = closeChangesPop;
+	el.querySelector('.doApply').onclick = () => { backend.send('applyFrame', { ip: ip }); closeChangesPop(); };
 }
 
 function drawFrame(frame) {
 	const _frameCont = document.createElement('section');
 	_frameCont.classList.add('frameCont');
-	_frameCont.style.order = frame.number;
-	if (frame.offline) _frameCont.classList.add('offline')
+	if (frame.offline) _frameCont.classList.add('offline');
 	_frameCont.setAttribute('data-ip', frame.ip);
-	let options = ""
-	if (frame.enabled) {
-		options = `<option value="ignore">Ignore</option>
-			<option value="scan">Scan Only</option>
-			<option value="blast" selected>Scan & Blast</option>`
-	} else if (frame.scan) {
-		options = `<option value="ignore">Ignore</option>
-			<option value="scan" selected>Scan Only</option>
-			<option value="blast">Scan & Blast</option>`
-	} else {
-		options = `<option value="ignore" selected>Ignore</option>
-			<option value="scan">Scan Only</option>
-			<option value="blast">Scan & Blast</option>`
-	}
+	const mode = frame.enabled ? 'blast' : (frame.scan ? 'scan' : 'ignore');
+	const opt = (v, l) => `<option value="${v}" ${mode === v ? 'selected' : ''}>${l}</option>`;
+	const slotOpts = Array.from({ length: 20 }, (_, i) => { const s = String(i + 1).padStart(2, '0'); return `<option value="${s}">Slot ${s}</option>`; }).join('');
 	const _header = `<header>
-		<button class="btn btn-secondary btn-sm me-2 collapseCards">Collapse All</button>
-		<input type="checkbox" class="form-check form-check-input collapseHeader frameCollapse" id="frame_${frame.ip.replaceAll('.','_')}">
-		<label class="frameName" for="frame_${frame.ip.replaceAll('.','_')}">F${frame.number}-${frame.name} - ${frame.ip}<span class="labelGroup">${frame.group}</span></label>
-		<div class="form-switch"><input type="checkbox" class="form-check-input frameEnable d-none" ${frame.enabled ? 'checked' : ''}></div>
-		<div class="d-none">Scan</div>
-		<div class="form-switch"><input type="checkbox" class="form-check-input frameScan d-none" ${frame.scan ? 'checked' : ''}></div>
-		<div class="frameError ms-auto"></div>
+		<div class="me-2">
+			<div class="frameName">F${escapeHTML(frame.number || '')} · ${escapeHTML(frame.name || '')}</div>
+			<div class="labelGroup mono">${escapeHTML(frame.ip)}${frame.group ? ' · ' + escapeHTML(frame.group) : ''}</div>
+		</div>
+		<input type="checkbox" class="form-check-input frameEnable d-none" ${frame.enabled ? 'checked' : ''}>
+		<input type="checkbox" class="form-check-input frameScan d-none" ${frame.scan ? 'checked' : ''}>
+		<div class="frameError"></div>
 		<div class="frameStatus ms-auto"></div>
-		<select class="frameScanMode form-select form-select-sm w-auto ms-1">
-			${options}
-		</select>
+		<span class="applyBtn d-none ms-1"><button class="go" title="Apply pending changes once (does not enable continuous blasting)">Apply changes</button><button class="num" title="Review what will change">0 ▾</button></span>
+		<select class="frameScanMode form-select form-select-sm w-auto ms-1">${opt('ignore', 'Ignore')}${opt('scan', 'Scan only')}${opt('blast', 'Scan & blast')}</select>
 		<select class="frameAutoReboot form-select form-select-sm w-auto ms-1" title="Auto-reboot a card after an IP/mode change (needs a reboot to apply)">
 			<option value="" ${!frame.autoReboot ? 'selected' : ''}>Auto-reboot: default</option>
-			<option value="on" ${frame.autoReboot === 'on' ? 'selected' : ''}>Auto-reboot: on</option>
-			<option value="off" ${frame.autoReboot === 'off' ? 'selected' : ''}>Auto-reboot: off</option>
+			<option value="on" ${frame.autoReboot === 'on' ? 'selected' : ''}>On</option>
+			<option value="off" ${frame.autoReboot === 'off' ? 'selected' : ''}>Off</option>
 		</select>
-		<select class="addCardSlot form-select form-select-sm w-auto ms-1" title="Pre-configure a card before it is online">
-			${Array.from({length:20},(_,i)=>{const s=String(i+1).padStart(2,'0');return `<option value="${s}">Slot ${s}</option>`}).join('')}
-		</select>
-		<button class="addCardBtn btn btn-outline-primary btn-sm ms-1" title="Stage this slot so its settings apply when the card comes online">Add Card</button>
+		<select class="addCardSlot form-select form-select-sm w-auto ms-1" title="Pre-configure a card before it is online">${slotOpts}</select>
+		<button class="addCardBtn btn btn-outline-primary btn-sm ms-1" title="Stage this slot so its settings apply when the card comes online">Add card</button>
 		<button class="frameDelete btn btn-danger btn-sm ms-1">Delete</button>
-	</header>`
+	</header>`;
 	_frameCont.insertAdjacentHTML('beforeend', _header);
-	_frameCont.insertAdjacentHTML('beforeend', `<section class="data collapseSection"></div>`);
+	_frameCont.insertAdjacentHTML('beforeend', `<section class="data"></section>`);
 	return _frameCont;
 }
 
@@ -295,6 +522,9 @@ function flushSlotInfo() {
 	const items = Array.from(_slotQueue.values());
 	_slotQueue.clear();
 	for (const slotInfo of items) applySlotInfo(slotInfo);
+	// Keep the sidebar pending counts + Apply buttons in sync after a scan batch.
+	renderRail();
+	updateApplyAll();
 }
 
 function applySlotInfo(slotInfo) {
@@ -306,7 +536,7 @@ function applySlotInfo(slotInfo) {
 	if (_slotRenderCache[cacheKey] === slotJSON) return; // unchanged -> skip the DOM walk
 	_slotRenderCache[cacheKey] = slotJSON;
 
-	const _framesCont = document.getElementById('framesCont');
+	const _framesCont = document.getElementById('frameDetail');
 	let _frameData = _framesCont.querySelector(`[data-ip="${frameIP}"] .data`);
 	if (!_frameData) {
 		const _frame = drawFrame(slotInfo.frame);
@@ -330,9 +560,8 @@ function applySlotInfo(slotInfo) {
 			if (slot.offline) _slotCont.classList.add('offline');
 			_frameData.appendChild(_slotCont);
 			_slotCont.insertAdjacentHTML('beforeend', `<header>
-				<button class="btn btn-secondary btn-sm me-2 collapseSettings">Collapse All</button>
-				<input type="checkbox" class="form-check form-check-input collapseHeader cardCollapse" id="header_${frameIP.replaceAll('.','_')}_${slotName}">
-				<label class="groupName" for="header_${frameIP.replaceAll('.','_')}_${slotName}">Slot ${slotName}</label>
+				<input type="checkbox" class="form-check-input collapseHeader slotCollapse" id="slot_${frameIP.replaceAll('.','_')}_${slotName}" checked>
+				<label class="groupName slotTitle" for="slot_${frameIP.replaceAll('.','_')}_${slotName}">Slot ${slotName}</label>
 				<div class="cardIface card1Iface me-2" data-status="${slot.ipaup || ''}">${mediaText(1, slot.ipa, slot.ipaup, slot.sfp1)}</div>
 				<div class="cardIface card2Iface me-auto" data-status="${slot.ipbup || ''}">${mediaText(2, slot.ipb, slot.ipbup, slot.sfp2)}</div>
 				<div class="blastLabel d-flex">Blast
@@ -379,7 +608,7 @@ function applySlotInfo(slotInfo) {
 			_slot = document.createElement('section');
 			_slot.classList.add('collapseSection');
 			_slotCont.append(_slot);
-			_slot.insertAdjacentHTML('beforeend', `<h4 class="m-1">Card Settings</h2>`);
+			_slot.insertAdjacentHTML('beforeend', sectionHeadHTML('card', 'Card Settings'));
 		}
 
 		commands.card.forEach((group, index) => {
@@ -387,6 +616,7 @@ function applySlotInfo(slotInfo) {
 			if (!_groupCont) {
 				_groupCont = document.createElement('section');
 				_groupCont.setAttribute('data-name', group.name);
+				_groupCont.setAttribute('data-section', 'card');
 				_groupCont.classList.add('groupCont');
 				_groupCont.insertAdjacentHTML('beforeend', `<header>
 						<input type="checkbox" class="form-check form-check-input collapseHeader groupCollapse" id="header_${frameIP.replaceAll('.','_')}_${slotName}_i${index}">
@@ -421,7 +651,7 @@ function applySlotInfo(slotInfo) {
 		})
 
 		if (!slotExists) {
-			_slot.insertAdjacentHTML('beforeend', `<h4 class="m-1">Spigots</h2>`);
+			_slot.insertAdjacentHTML('beforeend', sectionHeadHTML('spigot', 'Spigots'));
 		}
 		
 		for (let spigot = 0; spigot < 16; spigot++) {
@@ -432,8 +662,9 @@ function applySlotInfo(slotInfo) {
 			let _spigotCont = _slot.querySelector(`[data-spigot="${spigot}"]`);
 			if (!_spigotCont) {
 				_spigotCont = document.createElement('section');
-				_spigotCont.classList.add('groupCont');
+				_spigotCont.classList.add('groupCont', 'spigotCont');
 				_spigotCont.setAttribute('data-spigot', spigot);
+				_spigotCont.setAttribute('data-section', 'spigot');
 	
 				_slot.appendChild(_spigotCont)
 	
@@ -456,7 +687,7 @@ function applySlotInfo(slotInfo) {
 				if (!_groupCont) {
 					_groupCont = document.createElement('section');
 					_groupCont.setAttribute('data-name', group.name);
-					_groupCont.classList.add('groupCont');
+					_groupCont.classList.add('groupCont', 'spigotSub');
 					_groupCont.insertAdjacentHTML('beforeend', `<header>
 							<input type="checkbox" class="form-check form-check-input collapseHeader" id="header_spig_${frameIP.replaceAll('.','_')}_${slotName}_${spigot}_${index}">
 							<label class="groupName" for="header_spig_${frameIP.replaceAll('.','_')}_${slotName}_${spigot}_${index}">${group.name}</div>
@@ -525,7 +756,7 @@ function markFailures(_slotCont, failed) {
 
 function doFrameStatus(data) {
 	try {
-		const _framesCont = document.getElementById('framesCont');
+		const _framesCont = document.getElementById('frameDetail');
 		const _frame = _framesCont.querySelector(`[data-ip="${data.frameIP}"]`);
 		const _status = _frame.querySelector('.frameStatus');
 		if (data.offline) {
@@ -542,7 +773,7 @@ function doFrameStatus(data) {
 
 function doFrameError(data) {
 	try {
-		const _framesCont = document.getElementById('framesCont');
+		const _framesCont = document.getElementById('frameDetail');
 		const _frame = _framesCont.querySelector(`[data-ip="${data.frameIP}"]`);
 		const _status = _frame.querySelector('.frameError');
 		_status.innerHTML = data.error;
@@ -694,6 +925,7 @@ function updateCommand(_command, command, prefered = null, active, computed = nu
 	try {
 		// if (command.command == 4052) console.log(command, prefered, active)
 		const _read = _command.querySelector('.commandRead');
+		if (_read) _read.setAttribute('data-raw', active); // keep current value fresh for instant edit feedback
 		switch (command.type) {
 			case 'boolean':
 				_read.innerHTML = active == 0 ? 'False' : 'True';
@@ -1007,6 +1239,7 @@ function on(eventNames, selectors, callback) {
 
 function doInput(_element) {
 	if (_element.classList.contains('commandCheck')) return
+	autoEnableRow(_element); // editing a value means "manage this setting"
 	const command = _element.closest('.commandCont').getAttribute('data-command');
 	const take = _element.closest('.commandCont').getAttribute('data-take');
 	const slot = _element.closest('.slotCont').getAttribute('data-slot');
@@ -1023,9 +1256,11 @@ function doInput(_element) {
 		"take": take,
 		"dataType": dataType
 	});
+	afterEdit(_element);
 }
 
 function doCheck(_element) {
+	autoEnableRow(_element);
 	const command = _element.closest('.commandCont').getAttribute('data-command');
 	const take = _element.closest('.commandCont').getAttribute('data-take');
 	const slot = _element.closest('.slotCont').getAttribute('data-slot');
@@ -1042,9 +1277,11 @@ function doCheck(_element) {
 		"take": take,
 		"dataType": dataType
 	});
+	afterEdit(_element);
 }
 
 function doOctet(_element) {
+	autoEnableRow(_element);
 	const command = _element.closest('.commandCont').getAttribute('data-command');
 	const take = _element.closest('.commandCont').getAttribute('data-take');
 	const slot = _element.closest('.slotCont').getAttribute('data-slot');
@@ -1066,6 +1303,7 @@ function doOctet(_element) {
 		"take": take,
 		"dataType": dataType
 	});
+	afterEdit(_element);
 }
 
 function doEnable(_element) {

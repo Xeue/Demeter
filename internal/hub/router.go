@@ -68,6 +68,13 @@ func (r *Router) dispatch(c *Client, env Envelope) {
 		mustJSON(env.Data, &d)
 		e.PollNow(d.IP)
 		c.audit("pollNow", d)
+	case "applyFrame":
+		// Operator "Apply changes": one-shot force-blast of the pending diff
+		// (Scan-only mode) without enabling permanent blasting. Audited.
+		var d struct{ IP string }
+		mustJSON(env.Data, &d)
+		e.ApplyNow(d.IP)
+		c.audit("applyFrame", d)
 	case "stageCard":
 		var d struct{ IP, Slot string }
 		mustJSON(env.Data, &d)

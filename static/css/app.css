@@ -1,525 +1,289 @@
+/* Demeter — flat, professional dark theme (redesign per docs/mockups/04-combined).
+   Keeps the existing DOM contracts (collapse checkbox mechanic, .commandCont grid,
+   .cardIface[data-status], slot grid-areas) so all handlers keep working; the look
+   is what changes: flat surfaces, hairline borders, calm status instead of red fills. */
+
+:root {
+	--bg: #15181c;
+	--panel: #1b1e23;
+	--panel-2: #20242a;
+	--panel-3: #262b31;
+	--head: #1e2228;
+	--border: #31363d;
+	--border-soft: #262a30;
+	--text: #d6dadf;
+	--muted: #8a929b;
+	--faint: #5b636b;
+	--accent: #4a7fb5;
+	--accent-hover: #5a8fc5;
+	--ok: #5a9c7a;
+	--ok-bg: rgba(90, 156, 122, .14);
+	--warn: #c2973f;
+	--warn-bg: rgba(194, 151, 63, .15);
+	--bad: #bd5f6e;
+	--bad-bg: rgba(189, 95, 110, .15);
+	--mono: "SF Mono", "JetBrains Mono", ui-monospace, Consolas, monospace;
+	color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
 body {
-   margin: 0;
-   position: absolute;
-   inset: 0;
-}
-
-nav {
-   position: absolute;
-   bottom: 0;
-   right: 0;
-   margin: 5px;
-   padding: 5px;
-}
-
-label {
-   display: block;
-   padding: 5px;
-   border-radius: 5px;
-   text-transform: capitalize;
-   border: dashed 1px transparent;
-   cursor: pointer;
-}
-
-label > input {
-   margin-left: 10px;
-}
-
-label:has(:checked) {
-   border-color: white;
-   background: #2e303a;
-}
-
-label.blastLabel {
-   background: none !important;
-   border: none !important;
-   margin: 0;
-   padding: 0;
-   gap: 0.4rem;
-}
-
-.labelGroup {
-   background: #0049c1;
-   border-radius: 5px;
-   padding: 0.1rem 0.3rem;
-   margin-left: 0.4rem;
-}
-
-.blastLabel {
-   opacity: 0.5;
-   cursor: not-allowed;
-   gap: 0.4rem;
-   & *{
-      pointer-events: none;
-   }
-}
-
-.frameCont:has(.frameScanMode option[value="blast"]:checked) .blastLabel {
-   opacity: 1;
-   cursor: pointer;
-   & *{
-      pointer-events: all;
-   }
-}
-
-.log {
-   color: #fff;
-   white-space: break-spaces
-}
-
-.cyanLog {
-   color: cyan
-}
-
-.greenLog {
-   color: lime
-}
-
-.purpleLog {
-   color: #fe00fe
-}
-
-.blueLog {
-   color: blue
-}
-
-.yellowLog {
-   color: #ff0
-}
-
-.redLog {
-   color: red
-}
-
-.whiteLog {
-   color: #fff
-}
-
-.whiteLog.dimLog {
-   color: #969696
-}
-
-.greenLog.dimLog {
-   color: #005800
-}
-
-.redLog.dimLog {
-   color: darkred
-}
-
-.purpleLog.dimLog {
-   color: purple
-}
-
-.blueLog.dimLog {
-   color: #2d2dc9
-}
-
-.yellowLog.dimLog {
-   color: #9a9a00
-}
-
-.cyanLog.dimLog {
-   color: #009e9e
-}
-
-.green {
-   background-color: #417f3f;
-   border-top: 1px solid #459942 !important
-}
-
-.red {
-   background-color: #7f3f3f;
-   border-top: 1px solid #954f4f !important
-}
-
-.blue {
-   background-color: #3f6a7f;
-   border-top: 1px solid #4c8099 !important
-}
-
-.purple {
-   background-color: #7a3f7f;
-   border-top: 1px solid #99539f !important
-}
-
-.green:hover {
-   background-color: #28b538;
-   border-top: 1px solid #3ce34f !important
-}
-
-.red:hover {
-   background-color: #d50303;
-   border-top: 1px solid #ff5f5f !important
-}
-
-.blue:hover {
-   background-color: #00abff;
-   border-top: 1px solid #62cafd !important
-}
-
-.purple:hover {
-   background-color: #ce00df;
-   border-top: 1px solid #f253ff !important
-}
-
-.versionInfo {
-   align-self: center;
-   margin-right: auto;
-   padding-left: 20px;
-   font-size: 25pt;
-   color: #fff
-}
-
-
-#logsCont {
-   display: flex;
-   flex-direction: column-reverse;
-   overflow: auto;
-   height: 100%;
-}
-
-#logs {
-   font-family: Ubuntu Mono;
-   margin-bottom: auto;
-   line-height: normal;
-}
-
-body.micaActive {
-   background: transparent !important;
-}
-
-.bg-title {
-   background-color: #313d48;
-   app-region: drag;
-}
-
-
-.diskCapacity {
-   height: 1rem;
-   background: aliceblue;
-   border-radius: 6px;
-   overflow: hidden;
-}
-
-.diskCapacity::before {
-   content: "";
-   display: block;
-   height: 100%;
-   width: var(--capacity);
-   background: #00b2ff;
-}
-
-.diskCard {
-   background: #282e34;
-   margin: 1rem;
-   padding: 0.2rem;
-   border-radius: 7px;
-   margin-right: 0.5rem;
-   outline: #0d6efd00 1px solid;
-   box-shadow: #0d6efd00 0px 0px 9px -2px;
-   transition: 0.3s;
-}
-
-.diskCard:has(input:checked) {
-   outline: #0d6efd 1px solid;
-   box-shadow: #0D6EFD 0px 0px 9px -2px;
-}
-
-.diskIcon {
-   aspect-ratio: 1/1;
-   height: 3rem;
-   margin: 0 0.5rem;
-   background-image: url('../img/unknown.png');
-   background-size: contain;
-   background-position: center;
-   background-repeat: no-repeat;
-}
-
-.LocalFixedDisk {
-   background-image: url('../img/ssd.png');
-   background-size: contain;
-   background-position: center;
-   background-repeat: no-repeat;
-}
-
-.LocalFixedDiskC {
-   background-image: url('../img/ssd-c.png');
-   background-size: contain;
-   background-position: center;
-   background-repeat: no-repeat;
-}
-
-.RemovableDisk {
-   background-image: url('../img/usb.png');
-   background-size: contain;
-   background-position: center;
-   background-repeat: no-repeat;
-}
-
-.cardType {
-   background: #282e34;
-   margin: 1rem;
-   margin-left: 0.5rem;
-   padding: 0.5rem;
-   border-radius: 7px;
-   color: white;
-   width: 8rem;
-   background-size: 5rem;
-   background-position-x: center;
-   background-position-y: 0.5rem;
-   background-repeat: no-repeat;
-   height: 8rem;
-   text-align: center;
-   padding-top: 5.5rem;
-   cursor: pointer;
-   box-shadow: transparent 0px 0px 8px -3px;
-   transition: 0.3s;
-}
-
-.cardType:hover {
-   box-shadow: #000000 0px 0px 8px -3px;
-   scale: 1.05;
-}
-
-#chooseGateway {
-    background-image: url('../img/sdi.png');
-}
-
-#chooseMADI {
-    background-image: url('../img/madi.png');
-}
-
-#chooseMV {
-    background-image: url('../img/multi.png');
-}
-
-input,
-label,
-#showSelect,
-.btn,
-.nav-link {
-	app-region: no-drag;
-}
-
-#framesCont {
-   display: flex;
-   flex-direction: column;
-}
-
-@font-face {
-   font-family: Ubuntu Mono;
-   src: url(../fonts/UbuntuMono-R.ttf);
-}
-
-.configFirmwareSelect {
-   display: none;
-}
-
-.configFirmware:checked ~ .configFirmwareSelect {
-   display: block;
-}
-
-#diskConfigList {
-   display: grid;
-   grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-}
-
-#configControls {
-   right: 1rem;
-   bottom: 1rem;
-   position: fixed;
-}
-
-section.data:empty::before {
-   content: "No cards found yet...";
-}
-
-
-
-.collapseSection {
-   display: none;
-   flex-wrap: wrap;
-   padding: 0.1rem;
-   padding-left: 1rem;
-}
-
-header:has(.collapseHeader:checked) + .collapseSection {
-   display: grid;
-   /* gap: 0.3rem; */
-   padding-block: 0.3rem;
-}
-
-.frameCont header,
-.groupCont header {
-   display: flex;
-   padding-inline: 0.3rem;
-   background: #69696930;
-   align-items: center;
-}
-
-.frameCont,
-.groupCont {
-   background: #ffffff0d;
-   border-radius: 5px;
-   overflow: hidden;
-   margin-inline: 0.3rem;
-   margin-top: 0.3rem;
-}
-
-.commandCont {
-   margin: 5px;
-   display: grid;
-   grid-template-columns: 2.2rem 1fr 1fr 1fr 2fr;
-   text-align: left;
-   align-items: center;
-}
-
-.commandRead {
-   border-radius: 5px;
-   padding: 0.1rem 0.5rem;
-   width: 75%;
-}
-
-.cardIface[data-status="UP"] {
-   background: #345b34;
-}
-
-.cardIface {
-   background: #714343;
-   padding: 0.1rem 0.3rem;
-   border-radius: 5px;
-}
-
-.slotCont.offline {
-   display: none;
-}
-
-.showOffline .slotCont.offline {
-   display: block;
-}
-
-.slotCont.offline > header,
-.frameCont.offline > header {
-   background: #5b1b1b;
-}
-
-.slotCont.staged > header {
-   background: #4a3a13;
-}
-
-/* A control whose SET was rejected by the device after the verify-and-retry.
-   Distinct from the normal red "differs": an amber dashed ring + ⚠ marker. */
-.commandCont.cmdFailed .commandRead {
-   outline: 2px dashed #ffae00;
-   outline-offset: 1px;
-}
-
-.commandCont.cmdFailed .commandName::after {
-   content: " ⚠";
-   color: #ffae00;
-}
-
-.form-switch:has(.commandEnabled:not(:checked)) ~.commandInput {
-   color: dimgrey;
-   opacity: 0.5;
-}
-
-.form-switch:has(.commandEnabled:checked) ~.commandComputed {
-   color: dimgrey;
-   opacity: 0.5;
-}
-
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	-webkit-font-smoothing: antialiased;
+}
+.mono { font-family: var(--mono); }
+
+/* ---------- top nav ---------- */
+.navbar.bg-title, .bg-title { background: var(--head) !important; }
+nav.navbar {
+	display: flex; align-items: center; gap: 6px;
+	height: 46px; min-height: 46px; padding: 0 12px !important;
+	border-bottom: 1px solid var(--border);
+}
+.navbar-brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--text) !important; margin: 0 10px 0 0; padding: 0; }
+.navbar-brand img { width: 22px; height: 22px; }
+.tabSelect {
+	background: transparent !important; border: 0 !important; border-bottom: 2px solid transparent !important;
+	color: var(--muted) !important; font-weight: 500; padding: 12px 12px !important; border-radius: 0 !important;
+}
+.tabSelect:hover { color: var(--text) !important; }
+.tabSelect.active { color: var(--text) !important; border-bottom-color: var(--accent) !important; background: transparent !important; }
+nav .navbar-text { color: var(--muted) !important; font-size: 12.5px; padding: 0; }
+
+/* ---------- buttons / inputs (flatten Bootstrap) ---------- */
+.btn {
+	border-radius: 4px; font-weight: 500; font-size: 13px; border: 1px solid var(--border);
+	background: var(--panel-2); color: var(--text);
+}
+.btn:hover { background: var(--panel-3); border-color: #3c424a; color: var(--text); }
+.btn-sm { font-size: 12.5px; padding: .25rem .5rem; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-secondary { background: var(--panel-2); border-color: var(--border); color: var(--text); }
+.btn-danger { background: #2a1d20; border-color: #4a2f34; color: var(--bad); }
+.btn-danger:hover { background: #3a2329; border-color: #5a3a40; color: var(--bad); }
+.btn-outline-primary { background: transparent; border-color: var(--accent); color: var(--accent); }
+.btn-outline-danger { background: transparent; border-color: #4a2f34; color: var(--bad); }
+.btn-warning { background: var(--warn-bg); border-color: #473a1f; color: var(--warn); }
+
+.form-control, .form-select {
+	background: #171a1e; border: 1px solid var(--border); color: var(--text);
+	border-radius: 4px; font-size: 13px;
+}
+.form-control:focus, .form-select:focus { background: #171a1e; color: var(--text); border-color: var(--accent); box-shadow: 0 0 0 3px rgba(74, 127, 181, .2); }
+.form-control::placeholder { color: var(--faint); }
+.form-control-sm, .form-select-sm { font-size: 12.5px; }
+
+/* switches */
+.form-switch .form-check-input { background-color: #333a42; border-color: #333a42; box-shadow: none; width: 2.1em; }
+.form-check-input:checked { background-color: var(--accent); border-color: var(--accent); }
+.form-check-input:focus { box-shadow: 0 0 0 3px rgba(74, 127, 181, .2); border-color: var(--accent); }
+
+/* ---------- layout shell ---------- */
+/* body is a flex column (nav + main); main must grow to fill the viewport so the
+   sidebar/detail panels reach the bottom even when content is short. */
+#demeterCont { background: var(--bg); flex: 1 1 auto; min-height: 0; }
+.tab[data-tab] { background: var(--bg); }
+
+/* ---------- Frames: rail + detail two-pane ---------- */
+.framesLayout { display: grid; grid-template-columns: 270px 1fr; height: 100%; min-height: 0; }
+
+#frameRail { background: #181b20; border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+.railHead { padding: 10px 12px; border-bottom: 1px solid var(--border-soft); display: flex; flex-direction: column; gap: 8px; }
+.railHead .railTitle { font-size: 11px; letter-spacing: .7px; text-transform: uppercase; color: var(--faint); font-weight: 600; display: flex; }
+.railHead .railTitle .r { margin-left: auto; letter-spacing: 0; text-transform: none; color: var(--muted); font-weight: 500; }
+.railList { overflow: auto; flex: 1; min-height: 0; padding: 6px; }
+.railItem { display: flex; align-items: center; gap: 10px; padding: 8px 9px; border-radius: 4px; cursor: pointer; border-left: 2px solid transparent; }
+.railItem:hover { background: #ffffff07; }
+.railItem.active { background: #ffffff0e; border-left-color: var(--accent); }
+.railItem .nm { font-weight: 550; }
+.railItem .ip { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.railItem .rt { margin-left: auto; }
+.railFoot { padding: 9px 10px; border-top: 1px solid var(--border-soft); display: grid; gap: 6px; }
+.railFoot .addRow { display: grid; gap: 5px; }
+
+#frameDetail { overflow: auto; min-height: 0; }
+#frameDetail .frameCont { display: none; background: transparent; margin: 0; border-radius: 0; }
+#frameDetail .frameCont.selected { display: block; }
+.detailEmpty { color: var(--faint); display: grid; place-items: center; height: 100%; }
+
+/* status square + chips */
+.sq { width: 8px; height: 8px; border-radius: 2px; display: inline-block; flex: none; background: #3b4148; }
+.sq.ok { background: var(--ok); } .sq.warn { background: var(--warn); } .sq.bad { background: var(--bad); } .sq.off { background: #3b4148; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 3px; background: var(--panel-3); color: var(--muted); border: 1px solid var(--border); }
+.chip.ok { color: var(--ok); background: var(--ok-bg); border-color: #28402f; }
+.chip.warn { color: var(--warn); background: var(--warn-bg); border-color: #473a1f; }
+.chip.bad { color: var(--bad); background: var(--bad-bg); border-color: #4a2f34; }
+.count { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px; padding: 0 6px; border-radius: 3px; font-size: 11.5px; font-weight: 600; background: #2a2f35; color: var(--muted); border: 1px solid var(--border); }
+.count.warn { background: var(--warn-bg); color: var(--warn); border-color: #473a1f; }
+.count.ok { background: var(--ok-bg); color: var(--ok); border-color: #28402f; }
+
+/* apply button (split: action + clickable count) */
+.applyBtn { display: inline-flex; align-items: stretch; border: 1px solid var(--accent); border-radius: 4px; overflow: hidden; }
+.applyBtn .go { background: var(--accent); color: #fff; border: 0; padding: 0 11px; height: 30px; font: inherit; font-weight: 550; cursor: pointer; }
+.applyBtn .go:hover { background: var(--accent-hover); }
+.applyBtn .num { background: #172026; color: #cfe0ee; border: 0; border-left: 1px solid var(--accent); padding: 0 10px; height: 30px; font: inherit; font-weight: 600; cursor: pointer; }
+.applyBtn .num:hover { background: #1d2932; }
+
+/* ---------- frame / slot / group containers ---------- */
+.frameCont > header {
+	display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+	padding: 12px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.frameName { font-weight: 600; font-size: 15px; margin: 0; }
+.labelGroup { color: var(--muted); font-weight: 500; margin-left: 8px; font-size: 12.5px; }
+
+.slotCont, .groupCont { background: var(--panel); border: 1px solid var(--border); border-radius: 5px; overflow: hidden; margin: 12px 14px; }
+.slotCont > header, .groupCont > header {
+	display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+	background: transparent; border-bottom: 1px solid var(--border-soft);
+}
+.groupName { font-weight: 600; font-size: 13px; margin: 0; }
+.frameCont > .data { padding-bottom: 8px; }
+
+/* nested setting groups inside a slot: lighter, hairline-separated */
+.slotCont .groupCont { margin: 0; border: 0; border-top: 1px solid var(--border-soft); border-radius: 0; background: transparent; }
+.slotCont .groupCont > header { padding: 8px 14px; }
+
+.cardIface { font-family: var(--mono); font-size: 12px; padding: 3px 9px; border-radius: 4px; border: 1px solid var(--border); background: #181c20; color: var(--muted); }
+.cardIface[data-status="UP"] { color: var(--ok); border-color: #28402f; background: var(--ok-bg); }
+.cardIface[data-status="DOWN"] { color: var(--bad); border-color: #4a2f34; background: var(--bad-bg); }
+.blastLabel { color: var(--muted); font-size: 12.5px; gap: 7px; align-items: center; }
+
+/* ---------- collapse mechanic (preserved) ----------
+   Settings-group command lists collapse (default collapsed, chevron expands).
+   Frame body (.data) and the slot body are always shown when their frame is
+   selected, so you see slots + group headers without expanding anything. */
+.collapseSection { display: none; padding: 2px 14px 6px; }
+header:has(.collapseHeader:checked) + .collapseSection { display: grid; padding-block: 4px; }
+.frameCont > .data { display: block; padding: 0 0 8px; }
+/* the slot body collapses via the slot header's own chevron (default expanded) */
 .collapseHeader {
-   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='rgb(255,255,255)' fill-rule='evenodd' d='M1 8a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 8M7.646.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 1.707V5.5a.5.5 0 0 1-1 0V1.707L6.354 2.854a.5.5 0 1 1-.708-.708zM8 10a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 .708-.708L7.5 14.293V10.5A.5.5 0 0 1 8 10'/%3e%3c/svg%3e");
-   background-position: center;
-   background-repeat: no-repeat;
-   background-size: 80%;
+	-webkit-appearance: none; appearance: none; width: 16px; height: 16px; border: 0; background: transparent; cursor: pointer; padding: 0; margin: 0;
+	background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='%238a929b' d='M5.5 3.5l5 4.5-5 4.5z'/%3e%3c/svg%3e");
+	background-position: center; background-repeat: no-repeat; background-size: 12px; transition: transform .12s;
 }
+.collapseHeader:checked { transform: rotate(90deg); }
 
-.collapseHeader:checked {
-   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='rgb(255,255,255)' fill-rule='evenodd' d='M1 8a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 8m7-8a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 1 1 .708-.708L7.5 4.293V.5A.5.5 0 0 1 8 0m-.5 11.707-1.146 1.147a.5.5 0 0 1-.708-.708l2-2a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 11.707V15.5a.5.5 0 0 1-1 0z'/%3e%3c/svg%3e");
+/* ---------- command row (5-col grid preserved) ---------- */
+.commandCont {
+	margin: 0; padding: 5px 0; display: grid;
+	grid-template-columns: 2.6rem 1.4fr 1.3fr 1.3fr 2fr; gap: 10px;
+	text-align: left; align-items: center; border-bottom: 1px solid #1b2128;
 }
+.commandCont:last-child { border-bottom: 0; }
+.commandName { font-weight: 550; }
+/* current value (on device) — calm status, not a red fill */
+.commandRead {
+	font-family: var(--mono); font-size: 12.5px; border-radius: 4px; padding: 2px 8px; width: auto;
+	color: #aeb8c2; background: transparent; border: 1px solid transparent;
+	position: relative;
+}
+.commandRead.bg-success { background: transparent !important; color: var(--ok); }
+.commandRead.bg-danger { background: transparent !important; color: var(--warn); box-shadow: inset 2px 0 0 var(--warn); border-radius: 0; padding-left: 8px; }
+.commandRead.bg-success::before { content: "● "; color: var(--ok); }
+.commandRead.bg-danger::before { content: "▸ "; color: var(--warn); }
+/* group-computed value = the "Group" target hint */
+.commandComputed { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.commandComputed:not(:empty)::before { content: "group "; color: var(--faint); font-family: inherit; }
+/* target editor */
+.commandInput.form-control, .commandInput.form-select { max-width: 220px; height: 28px; }
+.commandInput.d-flex { gap: 4px; align-items: center; }
+.octet { width: 44px; text-align: center; padding: 2px 4px; height: 28px; }
 
-.frameCont {
-   grid-template-areas:
-      "01"
-      "02"
-      "03"
-      "04"
-      "05"
-      "06"
-      "07"
-      "08"
-      "09"
-      "10"
-      "11"
-      "12"
-      "13"
-      "14"
-      "15"
-      "16"
-      "17"
-      "18"
-      "19"
-      "20";
-}
+/* dim editor when this setting isn't managed */
+.form-switch:has(.commandEnabled:not(:checked)) ~ .commandInput { opacity: .45; }
+.form-switch:has(.commandEnabled:checked) ~ .commandComputed { opacity: .4; }
 
-[data-slot="01"] {grid-area:01;}
-[data-slot="02"] {grid-area:02;}
-[data-slot="03"] {grid-area:03;}
-[data-slot="04"] {grid-area:04;}
-[data-slot="05"] {grid-area:05;}
-[data-slot="06"] {grid-area:06;}
-[data-slot="07"] {grid-area:07;}
-[data-slot="08"] {grid-area:08;}
-[data-slot="09"] {grid-area:09;}
-[data-slot="10"] {grid-area:10;}
-[data-slot="11"] {grid-area:11;}
-[data-slot="12"] {grid-area:12;}
-[data-slot="13"] {grid-area:13;}
-[data-slot="14"] {grid-area:14;}
-[data-slot="15"] {grid-area:15;}
-[data-slot="16"] {grid-area:16;}
-[data-slot="17"] {grid-area:17;}
-[data-slot="18"] {grid-area:18;}
-[data-slot="19"] {grid-area:19;}
-[data-slot="20"] {grid-area:20;}
-/* Reboot-needed indicator: amber chip next to the Reboot button. The pulse
-   draws the eye; the title attribute carries the reasons as a tooltip. */
-.rebootNeeded {
-	cursor: help;
-	animation: rebootPulse 1.6s ease-in-out infinite;
-}
-@keyframes rebootPulse {
-	0%, 100% { opacity: 1; }
-	50%      { opacity: 0.55; }
-}
+/* failed control (SET rejected) — amber dashed marker */
+.commandCont.cmdFailed .commandRead { box-shadow: inset 2px 0 0 var(--warn); outline: 1px dashed #b9842f; outline-offset: 2px; }
+.commandCont.cmdFailed .commandName::after { content: " ⚠"; color: var(--warn); }
 
-/* Import/Export selection tree */
-.ioTree {
-	max-height: 55vh;
-	overflow-y: auto;
-	border: 1px solid rgba(255,255,255,0.12);
-	border-radius: .375rem;
-	padding: .5rem .75rem;
-}
-.ioSection {
-	font-weight: 600;
-	opacity: .7;
-	margin: .5rem 0 .25rem;
-	text-transform: uppercase;
-	font-size: .8rem;
-}
+/* ---------- offline / staged ---------- */
+.slotCont.offline { display: none; }
+.showOffline .slotCont.offline { display: block; }
+.slotCont.offline > header { background: var(--bad-bg); }
+.slotCont.staged > header { background: var(--warn-bg); }
+.frameCont.offline .frameName::after { content: " · offline"; color: var(--bad); font-weight: 500; font-size: 12px; }
+
+/* badges */
+.rebootNeeded.badge { background: var(--warn-bg) !important; color: var(--warn) !important; border: 1px solid #473a1f; font-weight: 600; cursor: help; }
+.stagedBadge.badge { background: var(--warn-bg) !important; color: var(--warn) !important; border: 1px solid #473a1f; }
+.frameStatus, .frameError { font-size: 12px; color: var(--muted); }
+.frameError { color: var(--bad); }
+
+/* ---------- groups / users / logs ---------- */
+.groupCommandCont { margin: 12px 14px; }
+#usersCont [data-user] { padding: 8px 0; border-bottom: 1px solid var(--border-soft); }
+#logs { font-family: var(--mono); font-size: 12px; background: #121519; }
+.log { padding: 1px 4px; border-bottom: 1px solid #181c21; white-space: pre-wrap; }
+.logTimestamp { color: var(--faint); } .logLevel { margin: 0 6px; } .logCatagory { color: var(--accent); }
+.redLog { color: var(--bad); } .greenLog { color: var(--ok); } .yellowLog { color: var(--warn); }
+.blueLog { color: #6ea8e0; } .purpleLog { color: #a98bd0; } .cyanLog { color: #5bb6c2; } .whiteLog { color: var(--text); }
+.dimLog { opacity: .6; } .brightLog { font-weight: 600; }
+
+/* ---------- import/export modal ---------- */
+.modal-content { background: var(--panel); border: 1px solid var(--border); color: var(--text); border-radius: 8px; }
+.modal-header { border-bottom: 1px solid var(--border-soft); }
+.ioTree { max-height: 55vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; padding: .5rem .75rem; background: #171a1e; }
+.ioSection { font-weight: 600; color: var(--faint); margin: .5rem 0 .25rem; text-transform: uppercase; font-size: .72rem; letter-spacing: .5px; }
 .ioSection:first-child { margin-top: 0; }
-.ioRow {
-	display: flex;
-	align-items: center;
-	gap: .5rem;
-	padding: .15rem 0;
-	cursor: pointer;
-}
-.ioRow input { cursor: pointer; }
+.ioRow { display: flex; align-items: center; gap: .5rem; padding: .15rem 0; cursor: pointer; }
 .ioFrame { font-weight: 500; margin-top: .25rem; }
 .ioSlot { padding-left: 1.75rem; opacity: .9; }
 .ioGroup { padding-left: .25rem; }
+.nav-tabs .nav-link { color: var(--muted); border: 0; }
+.nav-tabs .nav-link.active { color: var(--text); background: transparent; border-bottom: 2px solid var(--accent); }
+
+/* ---------- settings popover (global controls) ---------- */
+.popoverMenu { position: absolute; top: 46px; right: 12px; z-index: 50; width: 280px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 12px; box-shadow: 0 10px 30px -12px rgba(0,0,0,.6); }
+.popoverMenu.d-none { display: none; }
+.popoverMenu .row2 { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.popoverMenu .row2 label { margin: 0; color: var(--muted); flex: 1; }
+
+/* changes popup */
+.changesPop { position: absolute; z-index: 60; width: 540px; max-width: 92vw; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 12px 34px -12px rgba(0,0,0,.65); }
+.changesPop.d-none { display: none; }
+.changesPop header { display: flex; align-items: center; padding: 11px 13px; border-bottom: 1px solid var(--border-soft); font-weight: 600; }
+.changesPop header .x { margin-left: auto; background: none; border: 0; color: var(--muted); font-size: 15px; cursor: pointer; }
+.changesPop .body { max-height: 50vh; overflow: auto; }
+.changesPop table { width: 100%; border-collapse: collapse; }
+.changesPop th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--faint); font-weight: 600; padding: 6px 13px; border-bottom: 1px solid var(--border-soft); }
+.changesPop td { padding: 6px 13px; border-bottom: 1px solid #1b2128; font-size: 12.5px; }
+.changesPop td.v { font-family: var(--mono); }
+.changesPop .to { color: var(--warn); font-weight: 600; }
+.changesPop .arrow { color: var(--faint); padding: 0 5px; }
+.changesPop footer { display: flex; align-items: center; gap: 9px; padding: 11px 13px; }
+.changesPop footer .muted { margin-right: auto; color: var(--muted); }
+
+.drag { -webkit-app-region: drag; }
+.drag button, .drag input, .drag select, .drag a { -webkit-app-region: no-drag; }
+
+/* ---------- slot sections: Card Settings / Spigots ---------- */
+.slotTitle { font-size: 13.5px; }
+.secHead { display: flex; align-items: center; gap: 12px; padding: 14px 14px 4px; }
+.secHead h4 { margin: 0; font-size: 14px; font-weight: 650; letter-spacing: .2px; }
+.secHead .secActions { margin-left: auto; display: flex; gap: 6px; }
+.secHead .secActions .btn { padding: .15rem .5rem; font-size: 12px; }
+
+/* group headers inside a slot: hairline-separated, even spacing */
+.slotCont .collapseSection > .groupCont { border-top: 1px solid var(--border-soft); margin: 0; border-radius: 0; background: transparent; }
+.slotCont .collapseSection > .groupCont:first-child { border-top: 0; }
+.slotCont .groupCont > header { padding: 9px 14px; gap: 10px; min-height: 38px; }
+.slotCont .groupCont > header .groupName { font-weight: 600; }
+/* the command list gets a little breathing room + a faint inset so it reads as content */
+.slotCont .commandCont { padding: 6px 14px; }
+.slotCont .groupCont > .collapseSection { background: #161a1f; }
+
+/* ---------- spigots: clearer nesting ---------- */
+.spigotCont > header { background: #1a1f25; }
+.spigotCont > header .groupName::before { content: ""; }
+/* sub-groups (Interop / Audio / Video) under a spigot: indented with a left rule */
+.spigotSub { margin: 0 0 0 16px !important; border-left: 2px solid var(--border) !important; }
+.spigotSub > header { padding-left: 12px; background: transparent; }
+.spigotSub > header .groupName { font-weight: 500; color: var(--muted); }
+.spigotSub .commandCont { padding-left: 14px; }

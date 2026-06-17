@@ -66,7 +66,8 @@ type enableSlotMsg struct {
 	enabled bool
 }
 type rebootMsg struct{ slot string }
-type pollNowMsg struct{} // operator-triggered immediate scan + blast (retry)
+type pollNowMsg struct{}  // operator-triggered immediate scan (retry)
+type applyNowMsg struct{} // operator-triggered one-shot apply (force-blast the pending diff)
 type stageCardMsg struct{ slot string }
 type removeCardMsg struct{ slot string }
 type setAutoRebootMsg struct{ mode string } // "" inherit / "on" / "off"
@@ -90,6 +91,7 @@ type Actor struct {
 
 	inflight     bool
 	rescanQueued bool // an operator asked to scan/blast now while a scan was in flight
+	applyQueued  bool // the queued rescan should force-blast (Apply changes)
 	gen          uint64
 	scanCancel   context.CancelFunc
 
@@ -125,6 +127,7 @@ func (a *Actor) ApplyConfig(number, name, group, typ string) {
 }
 func (a *Actor) Reboot(slot string)              { a.send(rebootMsg{slot}) }
 func (a *Actor) PollNow()                        { a.send(pollNowMsg{}) }
+func (a *Actor) ApplyNow()                       { a.send(applyNowMsg{}) }
 func (a *Actor) StageCard(slot string)           { a.send(stageCardMsg{slot}) }
 func (a *Actor) RemoveCard(slot string)          { a.send(removeCardMsg{slot}) }
 func (a *Actor) SetAutoReboot(mode string)       { a.send(setAutoRebootMsg{mode}) }
@@ -179,9 +182,11 @@ func (a *Actor) run(ctx context.Context) {
 		case m := <-a.in:
 			switch v := m.(type) {
 			case pollTick:
-				a.handlePoll(ctx)
+				a.handlePoll(ctx, false)
 			case pollNowMsg:
 				a.handlePollNow(ctx)
+			case applyNowMsg:
+				a.handleApplyNow(ctx)
 			case scanResultMsg:
 				a.handleScanResult(ctx, v)
 			case applyConfig:
@@ -242,10 +247,22 @@ func (a *Actor) handlePollNow(ctx context.Context) {
 		a.rescanQueued = true
 		return
 	}
-	a.handlePoll(ctx)
+	a.handlePoll(ctx, false)
 }
 
-func (a *Actor) handlePoll(ctx context.Context) {
+// handleApplyNow is the operator "Apply changes": a one-shot scan that force-
+// blasts the pending diff once (respecting per-slot Blast + per-setting enabled)
+// without flipping the frame into permanent Scan & blast.
+func (a *Actor) handleApplyNow(ctx context.Context) {
+	if a.inflight {
+		a.rescanQueued = true
+		a.applyQueued = true
+		return
+	}
+	a.handlePoll(ctx, true)
+}
+
+func (a *Actor) handlePoll(ctx context.Context, force bool) {
 	if a.inflight {
 		return // a scan is already running; drop the tick (replaces the `done` gate)
 	}
@@ -257,7 +274,7 @@ func (a *Actor) handlePoll(ctx context.Context) {
 	working := cloneFrame(a.frame)
 	groups := a.deps.GroupsFn()
 	go func() {
-		a.deps.Scanner.CheckFrame(scanCtx, working, groups, a.conns)
+		a.deps.Scanner.CheckFrame(scanCtx, working, groups, a.conns, force)
 		select {
 		case a.in <- scanResultMsg{gen: gen, working: working}:
 		case <-a.done:
@@ -280,7 +297,9 @@ func (a *Actor) handleScanResult(ctx context.Context, v scanResultMsg) {
 	a.changed()
 	if a.rescanQueued {
 		a.rescanQueued = false
-		a.handlePoll(ctx) // operator requested a retry while this scan was running
+		force := a.applyQueued
+		a.applyQueued = false
+		a.handlePoll(ctx, force) // operator requested a retry (or apply) while this scan was running
 	}
 }
 

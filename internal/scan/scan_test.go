@@ -185,6 +185,73 @@ func TestGetFrameAddress(t *testing.T) {
 	}
 }
 
+// applyScenario builds a Scan-only frame (Enabled=false) with a pending frame
+// command (4108: Static→DHCP) and returns the frame device so a test can inspect
+// what was blasted.
+func applyScenario(t *testing.T) (*Scanner, *model.Frame, model.Groups, *testConns, *device.FakeDevice) {
+	t.Helper()
+	db, err := commandsdb.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Scanner{DB: db, Pool: pool.New(8), Events: noopEvents{}}
+	conns := newTestConns()
+	const frameIP = "10.0.0.1"
+	fd := conns.dev(frameIP)
+	fd.Seed("00", "00", 17044, model.StrVal("unit = 0x10"))
+	fd.Seed("10", "00", 16530, model.StrVal("IQUCP25_SDI v1"))
+	fd.Seed("10", "01", 4108, model.IntVal(1)) // device mode Static(1)
+	fd.Seed("10", "01", 4128, model.StrVal("UP"))
+	frame := &model.Frame{IP: frameIP, Number: "5", Group: "g1", Scan: true, Enabled: false,
+		Slots: map[string]*model.Slot{}}
+	groups := model.Groups{"g1": &model.Group{Name: "g1", Enabled: true,
+		Commands: map[string]model.CommandDef{
+			"4108": {Value: model.StrVal("0"), Enabled: true, Type: "card", DataType: "select"},
+		}}}
+	return s, frame, groups, conns, fd
+}
+
+func has4108Set(fd *device.FakeDevice) bool {
+	for _, set := range fd.Sets() {
+		if set.Cmd == 4108 {
+			return true
+		}
+	}
+	return false
+}
+
+// TestApplyOnceForceBlast: in Scan-only mode (frame.Enabled=false) a normal scan
+// does NOT blast, but forceBlast=true (operator Apply) writes the pending change
+// once — and the frame is never flipped to Enabled.
+func TestApplyOnceForceBlast(t *testing.T) {
+	t.Run("scan only does not blast", func(t *testing.T) {
+		s, frame, groups, conns, fd := applyScenario(t)
+		s.CheckFrame(context.Background(), frame, groups, conns, false)
+		if has4108Set(fd) {
+			t.Error("Scan-only must not blast")
+		}
+	})
+	t.Run("apply force-blasts once without enabling", func(t *testing.T) {
+		s, frame, groups, conns, fd := applyScenario(t)
+		s.CheckFrame(context.Background(), frame, groups, conns, true)
+		if !has4108Set(fd) {
+			t.Error("Apply (forceBlast) should have written 4108")
+		}
+		if frame.Enabled {
+			t.Error("Apply must not flip the frame to permanent blast")
+		}
+	})
+	t.Run("apply still respects a disabled slot", func(t *testing.T) {
+		s, frame, groups, conns, fd := applyScenario(t)
+		frame.Slots["01"] = &model.Slot{Enabled: false, Prefered: map[string]model.FramePrefered{},
+			Active: map[string]model.Value{}, Group: map[string]model.FrameGroup{}}
+		s.CheckFrame(context.Background(), frame, groups, conns, true)
+		if has4108Set(fd) {
+			t.Error("a disabled slot must not be blasted even on Apply")
+		}
+	})
+}
+
 func TestCheckFrameEndToEnd(t *testing.T) {
 	db, err := commandsdb.Load()
 	if err != nil {
@@ -226,7 +293,7 @@ func TestCheckFrameEndToEnd(t *testing.T) {
 		},
 	}
 
-	s.CheckFrame(context.Background(), frame, groups, conns)
+	s.CheckFrame(context.Background(), frame, groups, conns, false)
 
 	sl := frame.Slots["01"]
 	if sl == nil {
@@ -298,7 +365,7 @@ func TestWorkflow_UnreachableCard_SetsIPViaFrame_DefersBulk(t *testing.T) {
 		},
 	}
 
-	s.CheckFrame(context.Background(), frame, groups, conns)
+	s.CheckFrame(context.Background(), frame, groups, conns, false)
 
 	if frame.Slots["01"] == nil {
 		t.Fatal("slot 01 not discovered")

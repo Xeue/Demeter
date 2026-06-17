@@ -43,7 +43,7 @@ func TestStagedCardAppliedOnDiscovery(t *testing.T) {
 	cd.Seed("30", "00", 4108, model.IntVal(1))
 
 	frame := stagedFrame()
-	s.CheckFrame(context.Background(), frame, model.Groups{}, conns)
+	s.CheckFrame(context.Background(), frame, model.Groups{}, conns, false)
 
 	sl := frame.Slots["01"]
 	if sl == nil {
@@ -77,7 +77,7 @@ func TestStagedCardNotBlastedWhileAbsent(t *testing.T) {
 	fd.Seed("00", "00", 17044, model.StrVal("unit = 0x10")) // frame reachable, but no card seeded
 
 	frame := stagedFrame()
-	s.CheckFrame(context.Background(), frame, model.Groups{}, conns)
+	s.CheckFrame(context.Background(), frame, model.Groups{}, conns, false)
 
 	sl := frame.Slots["01"]
 	if sl == nil {

@@ -35,6 +35,7 @@ func main() {
 		workers     = flag.Int("workers", 8, "max concurrent RollCall operations")
 		user        = flag.String("user", "admin", "desktop session username (audited)")
 		debug       = flag.Bool("devtools", false, "enable webview dev tools")
+		mock        = flag.Bool("mock", false, "mock frames with cards for GUI dev (no hardware)")
 		showVersion = flag.Bool("version", false, "print version and exit")
 	)
 	flag.Parse()
@@ -52,6 +53,7 @@ func main() {
 	if *logLevel != "" {
 		cfg.LoggingLevel = *logLevel
 	}
+	cfg.Mock = *mock
 	if *listen != "" {
 		cfg.ListenAddr = *listen
 	}

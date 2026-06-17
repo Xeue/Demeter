@@ -62,7 +62,7 @@ func TestBlastVerifyRetryAndFail(t *testing.T) {
 	fd := conns.dev("10.0.0.1")
 	fd.RejectSet("10", "01", 4108) // device will not apply 4108
 
-	s.CheckFrame(context.Background(), frame, groups, conns)
+	s.CheckFrame(context.Background(), frame, groups, conns, false)
 
 	if got := countSets(fd, "10", "01", 4108); got != 3 {
 		t.Errorf("expected 4108 to be retried 3 times, got %d sends", got)
@@ -80,7 +80,7 @@ func TestBlastVerifySucceedsFirstTry(t *testing.T) {
 	s, conns, frame, groups := verifyFixture(t)
 	fd := conns.dev("10.0.0.1")
 
-	s.CheckFrame(context.Background(), frame, groups, conns)
+	s.CheckFrame(context.Background(), frame, groups, conns, false)
 
 	if got := countSets(fd, "10", "01", 4108); got != 1 {
 		t.Errorf("expected 4108 to be sent once on success, got %d", got)

@@ -28,6 +28,7 @@ func main() {
 		workers     = flag.Int("workers", 8, "max concurrent RollCall operations")
 		createAdmin = flag.String("create-admin", "", "create/reset an admin user as user:pass then exit")
 		resetPass   = flag.String("reset-password", "", "reset a password as user:pass then exit")
+		mock        = flag.Bool("mock", false, "mock frames with cards for GUI dev (no hardware)")
 		showVersion = flag.Bool("version", false, "print version and exit")
 	)
 	flag.Parse()
@@ -49,6 +50,7 @@ func main() {
 		cfg.LoggingLevel = *logLevel
 	}
 	cfg.TLSCert, cfg.TLSKey = *tlsCert, *tlsKey
+	cfg.Mock = *mock
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()

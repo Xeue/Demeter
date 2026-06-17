@@ -42,6 +42,7 @@ type Config struct {
 	DataDir string `json:"-"`
 	TLSCert string `json:"-"`
 	TLSKey  string `json:"-"`
+	Mock    bool   `json:"-"` // use a mock frame (GUI dev, no hardware)
 }
 
 // Defaults returns the built-in defaults (matching main.ts).

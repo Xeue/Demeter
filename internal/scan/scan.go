@@ -90,9 +90,11 @@ func buildShufflesList() map[uint32]bool {
 	return m
 }
 
-// CheckFrame scans (and, if enabled, blasts) one frame, mutating `frame`. groups
-// is a read-only snapshot; conns supplies device connections by IP.
-func (s *Scanner) CheckFrame(ctx context.Context, frame *model.Frame, groups model.Groups, conns Conns) {
+// CheckFrame scans one frame, mutating `frame`. It blasts when the frame is in
+// Scan & blast (frame.Enabled); a one-shot operator Apply passes forceBlast=true
+// to push the pending diff once without the frame being permanently enabled.
+// groups is a read-only snapshot; conns supplies device connections by IP.
+func (s *Scanner) CheckFrame(ctx context.Context, frame *model.Frame, groups model.Groups, conns Conns, forceBlast bool) {
 	frameIP := frame.IP
 
 	if !frame.Scan {
@@ -168,7 +170,7 @@ func (s *Scanner) CheckFrame(ctx context.Context, frame *model.Frame, groups mod
 		wg.Add(1)
 		go func(slot string) {
 			defer wg.Done()
-			s.scanSlot(ctx, frame, slot, address, groups, conns, restart)
+			s.scanSlot(ctx, frame, slot, address, groups, conns, restart, forceBlast)
 		}(slot)
 	}
 	wg.Wait()
@@ -226,7 +228,7 @@ func (s *Scanner) getFrameAddress(ctx context.Context, conns Conns, frameIP stri
 }
 
 // scanSlot ports the per-slot body of checkFrame (main.ts:538-742).
-func (s *Scanner) scanSlot(ctx context.Context, frame *model.Frame, slot, address string, groups model.Groups, conns Conns, restart map[uint32]string) {
+func (s *Scanner) scanSlot(ctx context.Context, frame *model.Frame, slot, address string, groups model.Groups, conns Conns, restart map[uint32]string, forceBlast bool) {
 	frameIP := frame.IP
 	slotHex := fmt.Sprintf("%02x", mustAtoi(slot))
 	checkNull := false
@@ -309,7 +311,7 @@ func (s *Scanner) scanSlot(ctx context.Context, frame *model.Frame, slot, addres
 
 	frameCommands, cardCommands, frameTakes, cardTakes := buildCommands(sl, checkNull)
 
-	if !frame.Enabled || !sl.Enabled {
+	if !(frame.Enabled || forceBlast) || !sl.Enabled {
 		// Not blasting: nothing was sent, so clear any reboot-needed/failed flags.
 		sl.RebootNeeded = false
 		sl.RebootReasons = nil

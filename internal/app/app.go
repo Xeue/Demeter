@@ -87,14 +87,20 @@ func Build(ctx context.Context, cfg config.Config, workers int) (*App, error) {
 			}
 		},
 	}
-	dialer := device.RollcallDialer{
-		Mode:          device.ParseMode(cfg.RollcallMode),
-		SetOpcode:     device.ParseSetOpcode(cfg.RollcallSetOpcode),
-		Port:          cfg.RollcallPort,
-		Handshake:     cfg.RollcallHandshake,
-		PerGetTimeout: cfg.RollcallTimeout(),
+	var dialer device.Dialer
+	if cfg.Mock {
+		dialer = &device.MockDialer{}
+		slog.Warn("MOCK MODE: simulating frames/cards in-process (no hardware)")
+	} else {
+		dialer = device.RollcallDialer{
+			Mode:          device.ParseMode(cfg.RollcallMode),
+			SetOpcode:     device.ParseSetOpcode(cfg.RollcallSetOpcode),
+			Port:          cfg.RollcallPort,
+			Handshake:     cfg.RollcallHandshake,
+			PerGetTimeout: cfg.RollcallTimeout(),
+		}
+		slog.Info("rollcall connection", "mode", cfg.RollcallMode, "port", cfg.RollcallPort, "setOpcode", cfg.RollcallSetOpcode, "handshake", cfg.RollcallHandshake, "getTimeoutMs", cfg.RollcallTimeoutMs)
 	}
-	slog.Info("rollcall connection", "mode", cfg.RollcallMode, "port", cfg.RollcallPort, "setOpcode", cfg.RollcallSetOpcode, "handshake", cfg.RollcallHandshake, "getTimeoutMs", cfg.RollcallTimeoutMs)
 	mgr := manager.New(ctx, scanner, dialer, st, h, st.Frames(), st.Groups(), cfg.ScanInterval(), autoOpts)
 	mgr.SetIntervalPersister(func(seconds int) {
 		cfg.ScanIntervalSeconds = seconds
@@ -123,6 +129,15 @@ func (a *App) startBackground(ctx context.Context) {
 	go a.Store.Run(ctx)
 	go a.Hub.Run(ctx.Done())
 	a.Mgr.Start()
+	if a.Cfg.Mock {
+		// Seed a frame so the GUI has content immediately; the mock dialer makes
+		// it "come online" with cards on the first scan. Skip if frames already
+		// exist (e.g. from a previous mock run).
+		if len(a.Mgr.FramesSnapshot()) == 0 {
+			a.Mgr.AddFrame("192.168.99.1", "1", "Mock Frame", "", "ucp")
+			a.Mgr.AddFrame("192.168.99.2", "2", "Mock Frame 2", "", "ucp")
+		}
+	}
 }
 
 // Run starts the background goroutines and serves on the configured address

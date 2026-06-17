@@ -31,39 +31,49 @@
             <button class="nav-link text-light tabSelect" data-tab="groups">Group Configs</button>
             <button class="nav-link text-light tabSelect" data-tab="logs">Logs</button>
             {{if .IsAdmin}}<button class="nav-link text-light tabSelect" data-tab="users">Users</button>{{end}}
-            <div class="d-flex m-auto pb-1">
-                <button class="align-self-center btn btn-primary btn-sm h-100" id="importExport" data-bs-toggle="modal" data-bs-target="#importPop">Import/Export</button>
-                <label for="showOffline">Show Offline Cards</label>
-                <div class="align-content-center form-switch">
-                    <input type="checkbox" id="showOffline" class="form-check-input">
-                </div>
-                {{if .IsAdmin}}
-                <label for="globalAutoReboot" class="ms-3" title="Default for all frames: auto-reboot a card after an IP/mode change (per-frame override available)">Auto-reboot (default)</label>
-                <div class="align-content-center form-switch">
-                    <input type="checkbox" id="globalAutoReboot" class="form-check-input" {{if .AutoRebootDefault}}checked{{end}}>
-                </div>
-                <label for="scanInterval" class="ms-3" title="Global scan/blast poll interval in seconds. Increase to back off polling on large systems.">Scan every</label>
-                <input type="number" id="scanInterval" class="form-control form-control-sm ms-1" style="width:5rem" min="1" max="3600" value="{{.ScanInterval}}" title="Seconds between scans (1–3600)">
-                <span class="navbar-text text-light ms-1">s</span>
-                {{end}}
+            <div class="ms-auto d-flex align-items-center gap-2">
+                <button class="btn btn-secondary btn-sm" id="importExport" data-bs-toggle="modal" data-bs-target="#importPop">Import / Export</button>
+                <button class="btn btn-secondary btn-sm" id="settingsBtn" title="Display &amp; scan settings">Settings</button>
+                <span class="navbar-text me-1" title="App version — quote this when reporting issues">v{{.Version}}</span>
+                <span class="navbar-text me-1">{{.Username}}</span>
+                <a class="btn btn-secondary btn-sm" href="/logout">Logout</a>
             </div>
-            <span class="navbar-text text-light me-2" title="App version — quote this when reporting issues">v{{.Version}}</span>
-            <span class="navbar-text text-light me-2">{{.Username}}</span>
-            <a class="btn btn-secondary btn-sm" href="/logout">Logout</a>
         </nav>
+        <div id="settingsMenu" class="popoverMenu d-none">
+            <div class="row2"><label for="showOffline">Show offline cards</label>
+                <div class="form-switch"><input type="checkbox" id="showOffline" class="form-check-input"></div></div>
+            {{if .IsAdmin}}
+            <div class="row2"><label for="globalAutoReboot" title="Default for all frames: auto-reboot a card after an IP/mode change (per-frame override available)">Auto-reboot (default)</label>
+                <div class="form-switch"><input type="checkbox" id="globalAutoReboot" class="form-check-input" {{if .AutoRebootDefault}}checked{{end}}></div></div>
+            <div class="row2"><label for="scanInterval" title="Global scan/blast poll interval in seconds.">Scan every (s)</label>
+                <input type="number" id="scanInterval" class="form-control form-control-sm" style="width:5rem" min="1" max="3600" value="{{.ScanInterval}}"></div>
+            {{end}}
+        </div>
         <main id="demeterCont" class="overflow-hidden">
-            <section class="tab h-100 overflow-auto" data-tab="frames">
-                <div class="p-2 d-flex gap-2">
-                    <button class="btn btn-secondary collapseFrames text-nowrap">Collapse All</button>
-                    <input class="form-control" id="addFrameIP" type="text" placeholder="Frame IP">
-                    <input class="form-control" id="addFrameNumber" type="text" placeholder="Frame Number">
-                    <input class="form-control" id="addFrameName" type="text" placeholder="Frame Name (optional)">
-                    <select class="form-select" id="addFrameGroup" type="text">
-                        <option value="" selected readonly hidden>Select Group (optional)</option>
-                    </select>
-                    <button class="form-control btn btn-primary" id="addFrameIPBtn">Add</button>
+            <section class="tab h-100" data-tab="frames">
+                <div class="framesLayout">
+                    <aside id="frameRail">
+                        <div class="railHead">
+                            <div class="railTitle">Frames <span class="r" id="railSummary"></span></div>
+                            <input class="form-control form-control-sm" id="frameSearch" type="search" placeholder="Search frames…">
+                        </div>
+                        <div class="railList" id="railList"></div>
+                        <div class="railFoot">
+                            <div class="addRow">
+                                <input class="form-control form-control-sm" id="addFrameIP" type="text" placeholder="Frame IP">
+                                <div class="d-flex gap-1">
+                                    <input class="form-control form-control-sm" id="addFrameNumber" type="text" placeholder="No.">
+                                    <input class="form-control form-control-sm" id="addFrameName" type="text" placeholder="Name">
+                                </div>
+                                <select class="form-select form-select-sm" id="addFrameGroup">
+                                    <option value="" selected readonly hidden>Group (optional)</option>
+                                </select>
+                                <button class="btn btn-primary btn-sm" id="addFrameIPBtn">+ Add frame</button>
+                            </div>
+                        </div>
+                    </aside>
+                    <div id="frameDetail"><div class="detailEmpty">Select a frame</div></div>
                 </div>
-                <article id="framesCont"></article>
             </section>
             <section class="tab h-100 overflow-auto d-none" data-tab="groups">
                 <div class="p-2 d-flex">

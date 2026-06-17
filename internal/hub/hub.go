@@ -22,6 +22,7 @@ type Engine interface {
 	EnableSlot(ip, slot string, enabled bool)
 	Reboot(ip, slot string)
 	PollNow(ip string)
+	ApplyNow(ip string)
 	ScanIntervalSeconds() int
 	SetScanInterval(seconds int)
 	SetAutoReboot(ip, mode string)
