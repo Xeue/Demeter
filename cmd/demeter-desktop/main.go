@@ -1,8 +1,10 @@
 //go:build desktop
 
 // Command demeter-desktop is the "Electron-style" build: it runs the full
-// Demeter server on a private loopback port and opens it in a native OS webview
-// window (WebView2 on Windows, WebKit on macOS/Linux) — no bundled Chromium.
+// Demeter web server on the configured address (default :8080, reachable by
+// other operators' browsers just like the headless server) AND opens it in a
+// native OS webview window (WebView2 on Windows, WebKit on macOS/Linux) — no
+// bundled Chromium. The window auto-logs-in over loopback.
 //
 // Build with the `desktop` tag and CGO enabled:
 //
@@ -28,6 +30,7 @@ import (
 func main() {
 	var (
 		dataDir     = flag.String("data-dir", defaultDataDir(), "data directory")
+		listen      = flag.String("listen", "", "web server listen address (overrides config, default :8080)")
 		logLevel    = flag.String("log-level", "", "log level A|D|W|E (overrides config)")
 		workers     = flag.Int("workers", 8, "max concurrent RollCall operations")
 		user        = flag.String("user", "admin", "desktop session username (audited)")
@@ -49,8 +52,12 @@ func main() {
 	if *logLevel != "" {
 		cfg.LoggingLevel = *logLevel
 	}
-	// Desktop always binds loopback only — the window is the only client.
-	cfg.ListenAddr = "127.0.0.1:0"
+	if *listen != "" {
+		cfg.ListenAddr = *listen
+	}
+	if cfg.ListenAddr == "" {
+		cfg.ListenAddr = ":8080"
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -64,10 +71,11 @@ func main() {
 		slog.Error("admin bootstrap failed", "err", err)
 	}
 
-	// Bind a loopback port first so we know the URL to point the window at.
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	// Serve on the configured address (default :8080) so other browsers can reach
+	// this instance — same as the headless server. Auth still applies.
+	ln, err := net.Listen("tcp", cfg.ListenAddr)
 	if err != nil {
-		slog.Error("could not bind loopback port", "err", err)
+		slog.Error("could not start web server", "addr", cfg.ListenAddr, "err", err)
 		os.Exit(1)
 	}
 	go func() {
@@ -82,7 +90,11 @@ func main() {
 		slog.Error("could not create desktop session", "err", err)
 		os.Exit(1)
 	}
-	url := "http://" + ln.Addr().String() + "/desktop-login?token=" + token
+	// Point the window at loopback regardless of the bind address, so the
+	// loopback-only /desktop-login auto-login is honoured.
+	_, port, _ := net.SplitHostPort(ln.Addr().String())
+	slog.Info("Demeter desktop: web server listening", "addr", ln.Addr().String(), "browse", "http://<this-host>:"+port)
+	url := "http://127.0.0.1:" + port + "/desktop-login?token=" + token
 
 	w := webview.New(*debug)
 	defer w.Destroy()

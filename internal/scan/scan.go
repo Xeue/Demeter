@@ -12,7 +12,9 @@ package scan
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -107,7 +109,15 @@ func (s *Scanner) CheckFrame(ctx context.Context, frame *model.Frame, groups mod
 			return
 		}
 		frame.Offline = true
-		s.Events.FrameStatus(frameIP, "Cannot reach frame", frame.Offline)
+		// Distinguish "can't open the TCP connection" (network/port/firewall)
+		// from "connected but no RollCall reply" (handshake/addressing), and log
+		// the underlying cause so a remote failure is diagnosable.
+		status := "Cannot reach frame"
+		if errors.Is(err, device.ErrFrameNoResponse) {
+			status = "Frame connected but not responding"
+		}
+		slog.Warn("frame address discovery failed", "frame", frameIP, "status", status, "err", err)
+		s.Events.FrameStatus(frameIP, status, frame.Offline)
 		frame.Done = true
 		return
 	}
@@ -383,20 +393,34 @@ func (s *Scanner) checkCard(ctx context.Context, conns Conns, cardIP string) (in
 func (s *Scanner) batchGet(ctx context.Context, conns Conns, ip, addr, slot string, cmds []uint32) (map[uint32]model.Value, error) {
 	dev, err := conns.Device(ctx, ip)
 	if err != nil {
-		return nil, device.ErrFrameUnreachable
+		// TCP connect failed — preserve the underlying cause (refused/timeout/...).
+		return nil, fmt.Errorf("connect %s: %w", ip, err)
 	}
 	if err := s.Pool.Acquire(ctx); err != nil {
 		return nil, err
 	}
 	defer s.Pool.Release()
-	vals, _ := dev.BatchGet(ctx, addr, slot, cmds)
+	vals, errs := dev.BatchGet(ctx, addr, slot, cmds)
 	if len(vals) == 0 && len(cmds) > 0 {
 		if ctx.Err() != nil {
 			return vals, ctx.Err()
 		}
-		return vals, device.ErrFrameUnreachable
+		// Connected, but nothing came back: surface a representative cause and tag
+		// it so the caller can report "connected but not responding".
+		return vals, fmt.Errorf("no reply from %s addr=%s slot=%s (%v): %w", ip, addr, slot, firstErr(errs), device.ErrFrameNoResponse)
 	}
 	return vals, nil
+}
+
+// firstErr returns any one underlying GET error (they are typically the same
+// per-call deadline/offline), or a generic fallback.
+func firstErr(errs map[uint32]error) error {
+	for _, e := range errs {
+		if e != nil {
+			return e
+		}
+	}
+	return device.ErrFrameNoResponse
 }
 
 func getv(m map[uint32]model.Value, cmd uint32) model.Value {

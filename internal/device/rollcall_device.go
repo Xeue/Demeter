@@ -2,6 +2,8 @@ package device
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,9 +18,33 @@ const (
 	defaultDialTimeout      = 3 * time.Second
 )
 
+// ParseMode maps a config string to a rollcall transport mode. Anything other
+// than "connected" (case-insensitive) is the default, Unconnected (RollTrak
+// dialect, port-0 addressing) — the mode Demeter's addressing matches.
+func ParseMode(s string) rollcall.Mode {
+	if strings.EqualFold(strings.TrimSpace(s), "connected") {
+		return rollcall.Connected
+	}
+	return rollcall.Unconnected
+}
+
+// ParseSetOpcode maps a hex string (e.g. "0b", "0d") to the unconnected-mode SET
+// opcode, defaulting to the best guess (0x0b) for an empty/invalid value.
+func ParseSetOpcode(s string) rollcall.Opcode {
+	if v, err := strconv.ParseUint(strings.TrimSpace(strings.TrimPrefix(s, "0x")), 16, 8); err == nil && v != 0 {
+		return rollcall.Opcode(v)
+	}
+	return rollcall.OpUReq
+}
+
 // RollcallDialer opens real RollCall connections (one persistent client per
 // frame IP).
 type RollcallDialer struct {
+	// Mode selects the RollCall dialect (default Connected — the zero value).
+	// app.go sets this from config (default Unconnected).
+	Mode rollcall.Mode
+	// SetOpcode overrides the unconnected-mode SET opcode (0 => default 0x0b).
+	SetOpcode rollcall.Opcode
 	// Port overrides the RollCall TCP port (0 => rollcall.DefaultPort).
 	Port int
 	// PerGetTimeout bounds a single GET so an absent unit fails fast (0 => default).
@@ -29,13 +55,17 @@ type RollcallDialer struct {
 	// mid-provisioning state) fails fast instead of blocking on the OS timeout
 	// (0 => default).
 	DialTimeout time.Duration
-	// Keepalive enables the (gated) OPEN/IDENTITY session management in SEAM #2.
-	Keepalive bool
+	// Handshake enables the (gated) connect-time IDENTITY login in SEAM #2 — try
+	// it when a frame connects (TCP) but never answers RollCall GETs.
+	Handshake bool
 }
 
 // Dial opens one persistent RollCall connection to frameIP.
 func (rd RollcallDialer) Dial(ctx context.Context, frameIP string) (Device, error) {
-	var opts []rollcall.Option
+	opts := []rollcall.Option{rollcall.WithMode(rd.Mode)}
+	if rd.SetOpcode != 0 {
+		opts = append(opts, rollcall.WithUnconnectedSetOpcode(rd.SetOpcode))
+	}
 	if rd.Port != 0 {
 		opts = append(opts, rollcall.WithPort(rd.Port))
 	}
@@ -49,7 +79,11 @@ func (rd RollcallDialer) Dial(ctx context.Context, frameIP string) (Device, erro
 	if err != nil {
 		return nil, err
 	}
-	startSession(c, rd.Keepalive)
+	// Unconnected mode logs in itself (0x15) inside rollcall.Dial. The connected
+	// IDENTITY handshake only applies to connected mode, and stays gated.
+	if rd.Mode == rollcall.Connected {
+		startSession(c, rd.Handshake)
+	}
 	return &rollcallDevice{
 		c:                c,
 		perGetTimeout:    orDur(rd.PerGetTimeout, defaultPerGetTimeout),

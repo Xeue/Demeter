@@ -62,8 +62,13 @@ func (o Opcode) String() string {
 	}
 }
 
-// isData reports whether the opcode carries a command id (and optionally a value).
-func (o Opcode) isData() bool { return o == OpGet || o == OpSet || o == OpReply }
+// connectedData reports whether the opcode is a connected-mode data op (uint32
+// command id + uint32 dataType): GET/SET/REPLY.
+func (o Opcode) connectedData() bool { return o == OpGet || o == OpSet || o == OpReply }
+
+// unconnectedData reports whether the opcode is an unconnected-mode data op
+// (uint16 command id + uint16 dataType): request/reply.
+func (o Opcode) unconnectedData() bool { return o == OpUReq || o == OpUReply }
 
 // Addr is a RollCall logical address: net.unit.port, three big-endian uint16s.
 //
@@ -163,6 +168,33 @@ func (v Value) encode() []byte {
 	}
 }
 
+// encodeUnconnected serialises a value in unconnected (RollTrak) form:
+//
+//	dataType(u16) | reserved(u32) | payload
+//
+// where an int payload is a uint32 and a string is NUL-terminated ASCII. This
+// matches the observed unconnected REPLY layout. NOTE: no unconnected *write* was
+// ever captured, so using this to SET is UNCONFIRMED — validate on a non-air
+// frame (the blast verify-and-retry will flag it if the device rejects it).
+func (v Value) encodeUnconnected() []byte {
+	switch v.Kind {
+	case KindInt:
+		b := make([]byte, 0, 6)
+		b = binary.BigEndian.AppendUint16(b, uint16(KindInt))
+		b = binary.BigEndian.AppendUint32(b, v.Int) // value follows directly (no reserved)
+		return b
+	case KindString:
+		b := make([]byte, 0, 6+len(v.Str)+1)
+		b = binary.BigEndian.AppendUint16(b, uint16(KindString))
+		b = binary.BigEndian.AppendUint32(b, 0) // reserved
+		b = append(b, v.Str...)
+		b = append(b, 0) // NUL terminator
+		return b
+	default:
+		return nil
+	}
+}
+
 // Message is a decoded RollCall message.
 type Message struct {
 	Dst    Addr
@@ -191,15 +223,25 @@ func getAddr(b []byte) Addr {
 // inner builds the inner payload (everything after the innerLen field).
 func (m Message) inner() []byte {
 	buf := []byte{byte(m.Opcode), m.Flags}
-	if m.Opcode.isData() {
-		var c [4]byte
-		binary.BigEndian.PutUint32(c[:], m.CmdID)
-		buf = append(buf, c[:]...)
+	switch {
+	case m.Opcode.connectedData(): // uint32 command id
+		buf = binary.BigEndian.AppendUint32(buf, m.CmdID)
 		if m.Value.Kind != KindNone {
 			buf = append(buf, m.Value.encode()...)
 		}
-	} else if len(m.Raw) > 0 {
-		buf = append(buf, m.Raw...)
+	case m.Opcode.unconnectedData(): // uint16 command id
+		if len(m.Raw) > 0 {
+			buf = append(buf, m.Raw...) // caller pre-built the body (e.g. a custom SET opcode)
+		} else {
+			buf = binary.BigEndian.AppendUint16(buf, uint16(m.CmdID))
+			if m.Value.Kind != KindNone {
+				buf = append(buf, m.Value.encodeUnconnected()...)
+			}
+		}
+	default:
+		if len(m.Raw) > 0 {
+			buf = append(buf, m.Raw...)
+		}
 	}
 	return buf
 }
@@ -264,35 +306,78 @@ func Decode(b []byte) (Message, int, error) {
 		m.Flags = inner[1]
 	}
 
-	if m.Opcode.isData() && innerLen >= 6 {
+	switch {
+	case m.Opcode.connectedData() && innerLen >= 6:
 		m.CmdID = binary.BigEndian.Uint32(inner[2:6])
-		rest := inner[6:]
-		if len(rest) >= 4 {
-			dataType := binary.BigEndian.Uint32(rest[0:4])
-			switch ValueKind(dataType) {
-			case KindInt:
-				if len(rest) >= 8 {
-					m.Value = Value{Kind: KindInt, Int: binary.BigEndian.Uint32(rest[4:8])}
-				} else {
-					m.Value = unknownValue(dataType, rest[4:]) // truncated int body
-				}
-			case KindString:
-				if len(rest) >= 8 {
-					s := rest[8:]
-					if i := bytes.IndexByte(s, 0); i >= 0 {
-						s = s[:i]
-					}
-					m.Value = Value{Kind: KindString, Str: string(s)}
-				} else {
-					m.Value = unknownValue(dataType, rest[4:]) // truncated string body
-				}
-			default:
-				m.Value = unknownValue(dataType, rest[4:]) // float/enum/etc — surface, don't drop
-			}
+		m.Value = decodeConnectedValue(inner[6:])
+	case m.Opcode.unconnectedData() && innerLen >= 4:
+		m.CmdID = uint32(binary.BigEndian.Uint16(inner[2:4]))
+		m.Value = decodeUnconnectedValue(inner[4:])
+	default:
+		if innerLen > 2 {
+			m.Raw = append([]byte(nil), inner[2:]...)
 		}
-	} else if innerLen > 2 {
-		m.Raw = append([]byte(nil), inner[2:]...)
 	}
 
 	return m, 4 + outer, nil
+}
+
+// decodeConnectedValue parses a connected-mode value body: dataType(u32) then
+// the payload (int = u32; string = reserved u32 + NUL ASCII).
+func decodeConnectedValue(rest []byte) Value {
+	if len(rest) < 4 {
+		return Value{}
+	}
+	dataType := binary.BigEndian.Uint32(rest[0:4])
+	switch ValueKind(dataType) {
+	case KindInt:
+		if len(rest) >= 8 {
+			return Value{Kind: KindInt, Int: binary.BigEndian.Uint32(rest[4:8])}
+		}
+	case KindString:
+		if len(rest) >= 8 {
+			return Value{Kind: KindString, Str: cstr(rest[8:])}
+		}
+	}
+	return unknownValue(dataType, rest[4:]) // float/enum/truncated — surface, don't drop
+}
+
+// decodeUnconnectedValue parses an unconnected-mode value body. Confirmed against
+// captures + hardware:
+//
+//	int   (dataType 1): dataType(u16) | value          — NO reserved word, like
+//	                    connected int (value is u32, or u16 for a 2-byte body)
+//	string(dataType 2/3): dataType(u16) | reserved(u32) | NUL-terminated ASCII
+//
+// dataType 3 is the "No Unit Fitted" status string (an empty/absent slot). Enum/
+// select parameters are integers, so getting the int layout right is what makes
+// them read (they showed "undefined" when int was mis-parsed as having a reserved).
+func decodeUnconnectedValue(rest []byte) Value {
+	if len(rest) < 2 {
+		return Value{}
+	}
+	dataType := uint32(binary.BigEndian.Uint16(rest[0:2]))
+	body := rest[2:]
+	switch dataType {
+	case 1: // int — value immediately follows the dataType (no reserved word)
+		switch {
+		case len(body) >= 4:
+			return Value{Kind: KindInt, Int: binary.BigEndian.Uint32(body[0:4])}
+		case len(body) >= 2:
+			return Value{Kind: KindInt, Int: uint32(binary.BigEndian.Uint16(body[0:2]))}
+		}
+	case 2, 3: // string — a reserved u32 then NUL-terminated ASCII
+		if len(body) >= 4 {
+			return Value{Kind: KindString, Str: cstr(body[4:])}
+		}
+	}
+	return unknownValue(dataType, body)
+}
+
+// cstr returns the bytes up to the first NUL as a string.
+func cstr(b []byte) string {
+	if i := bytes.IndexByte(b, 0); i >= 0 {
+		b = b[:i]
+	}
+	return string(b)
 }

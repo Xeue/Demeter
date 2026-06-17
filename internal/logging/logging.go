@@ -56,7 +56,10 @@ func New(out io.Writer, level slog.Level, now func() time.Time) *Handler {
 // is built.
 func (h *Handler) SetEmitter(e Emitter) { h.emitter.Store(&e) }
 
-func (h *Handler) Enabled(_ context.Context, l slog.Level) bool { return l >= h.level }
+// Enabled accepts every standard record (Debug and up) so the GUI can receive
+// ALL logs and filter on the front-end. The text sink (file/stderr) is gated
+// separately by the configured level inside Handle.
+func (h *Handler) Enabled(_ context.Context, l slog.Level) bool { return l >= slog.LevelDebug }
 
 func (h *Handler) Handle(_ context.Context, r slog.Record) error {
 	cat := h.cat
@@ -75,10 +78,14 @@ func (h *Handler) Handle(_ context.Context, r slog.Record) error {
 	ts := h.now().Format("15:04:05")
 	level, colour := levelInfo(r.Level)
 
-	h.mu.Lock()
-	fmt.Fprintf(h.out, "[%s] (%s) %s: %s\n", ts, level, cat, msg)
-	h.mu.Unlock()
+	// Text sink honours the configured file level (keeps the log file uncluttered).
+	if r.Level >= h.level {
+		h.mu.Lock()
+		fmt.Fprintf(h.out, "[%s] (%s) %s: %s\n", ts, level, cat, msg)
+		h.mu.Unlock()
+	}
 
+	// The GUI gets every record; the front-end does the filtering.
 	if ep := h.emitter.Load(); ep != nil && *ep != nil {
 		(*ep)(Event{TimeString: ts, Level: level, Category: cat, Message: msg, Colour: colour})
 	}

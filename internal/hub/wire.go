@@ -24,7 +24,8 @@ const (
 	chSlotInfo    = "slotInfo"
 	chFrameStatus = "frameStatus"
 	chFrameError  = "frameError"
-	chLog         = "log"
+	chLog         = "log"  // a single live log event
+	chLogs        = "logs" // a batch of recent log events (history replay on connect)
 	chUsers       = "users"
 	chCredentials = "credentials"
 	chExport      = "exportData"

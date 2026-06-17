@@ -22,8 +22,15 @@ import (
 // ErrUnitOffline means a unit (card) did not answer in time / is unreachable.
 var ErrUnitOffline = errors.New("device: unit offline/unreachable")
 
-// ErrFrameUnreachable means the frame connection itself could not be used.
+// ErrFrameUnreachable means the frame connection itself could not be opened
+// (TCP dial failed: refused, timed out, no route, wrong port).
 var ErrFrameUnreachable = errors.New("device: frame unreachable")
+
+// ErrFrameNoResponse means the TCP connection opened but the frame answered no
+// GETs — i.e. it is reachable on the network but not replying on the RollCall
+// protocol (likely the connect handshake/addressing, not connectivity). Kept
+// distinct from ErrFrameUnreachable so the UI/log can point at the right cause.
+var ErrFrameNoResponse = errors.New("device: frame not responding")
 
 // legacySentinels are the rolltrak stdout stand-ins the TS code compared against.
 // Native reads never produce these, but IsAbsent recognises them so the scan
@@ -32,6 +39,7 @@ var legacySentinels = map[string]struct{}{
 	"StringVal":              {},
 	"No rollcall connection": {},
 	"Not In Use":             {},
+	"No Unit Fitted":         {}, // confirmed in the unconnected capture: an empty/absent slot
 }
 
 // IsAbsent reports whether a scanned value means "no usable value": a None

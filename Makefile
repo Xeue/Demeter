@@ -27,7 +27,7 @@ DESKTOP_OUT := $(APP_NAME)-v$(VERSION)
 HOST_GOOS   := $(shell go env GOOS)
 HOST_EXT    := $(if $(filter windows,$(HOST_GOOS)),.exe,)
 
-.PHONY: version server desktop desktop-macapp server-windows desktop-windows server-linux test clean
+.PHONY: version server desktop desktop-macapp server-windows desktop-windows server-linux probe probe-windows test clean
 
 ## Print the version Make will stamp/name with
 version:
@@ -66,9 +66,19 @@ desktop-windows:
 server-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o $(BIN)-v$(VERSION)-linux-amd64 ./cmd/demeter
 
+## RollCall connectivity probe (current OS) — diagnose "Cannot reach frame"
+probe:
+	CGO_ENABLED=0 go build -o rcprobe ./cmd/rcprobe
+	@echo "Built rcprobe — run: ./rcprobe -frame <frameIP>"
+
+## RollCall probe for Windows x64 (ship rcprobe.exe to a site to test their frame)
+probe-windows:
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o rcprobe-windows-amd64.exe ./cmd/rcprobe
+	@echo "Built rcprobe-windows-amd64.exe — run: rcprobe-windows-amd64.exe -frame <frameIP>"
+
 test:
 	go test -race ./...
 
 clean:
-	rm -f $(BIN) $(BIN)-v*-* $(DESKTOP) $(DESKTOP)-v*
+	rm -f $(BIN) $(BIN)-v*-* $(DESKTOP) $(DESKTOP)-v* rcprobe rcprobe-*
 	rm -rf $(APP_NAME).app $(APP_NAME)-v*

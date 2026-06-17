@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demeter — Mockup D · Combined</title>
+<style>
+/* Flat, plain, tool-like. No gradients, glows, neon pills, emoji or large radii. */
+:root{
+	--bg:#15181c; --panel:#1b1e23; --panel-2:#20242a; --panel-3:#262b31; --head:#1e2228;
+	--border:#31363d; --border-soft:#262a30;
+	--text:#d6dadf; --muted:#8a929b; --faint:#5b636b;
+	--accent:#4a7fb5; --accent-hover:#5a8fc5;
+	--ok:#5a9c7a; --warn:#c2973f; --bad:#bd5f6e;
+	--mono:"SF Mono","JetBrains Mono",ui-monospace,"Consolas",monospace;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+	font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;}
+.mono{font-family:var(--mono);}
+.muted{color:var(--muted);} .faint{color:var(--faint);}
+
+/* top bar */
+.topbar{display:flex;align-items:center;gap:20px;height:46px;padding:0 14px;background:var(--head);border-bottom:1px solid var(--border);}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14px;letter-spacing:.2px;}
+.brand .mark{width:18px;height:18px;border-radius:3px;background:var(--accent);}
+.tabs{display:flex;gap:4px;height:100%;}
+.tab{display:flex;align-items:center;padding:0 12px;color:var(--muted);font-weight:500;cursor:pointer;border:0;background:none;
+	border-bottom:2px solid transparent;font-size:13px;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--text);border-bottom-color:var(--accent);}
+.spacer{flex:1;}
+.topbar .meta{color:var(--muted);font-size:12.5px;}
+.topbar .sep{width:1px;height:18px;background:var(--border);}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border:1px solid var(--border);
+	background:var(--panel-2);color:var(--text);font:inherit;font-weight:500;border-radius:4px;cursor:pointer;white-space:nowrap;}
+.btn:hover{background:var(--panel-3);border-color:#3c424a;}
+.btn.sm{height:26px;padding:0 9px;font-size:12.5px;}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.btn.primary:hover{background:var(--accent-hover);}
+.btn.link{background:none;border:none;height:auto;padding:0;color:var(--accent);font-weight:600;cursor:pointer;}
+.btn.danger{color:var(--bad);}
+.btn.danger:hover{background:#2a1d20;border-color:#4a2f34;}
+.sel{height:30px;padding:0 26px 0 9px;border:1px solid var(--border);background:var(--panel-2)
+	url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%238a929b' stroke-width='1.5'><path d='M1 1l4 4 4-4'/></svg>") no-repeat right 9px center;
+	color:var(--text);font:inherit;border-radius:4px;appearance:none;cursor:pointer;}
+.in{height:30px;padding:0 9px;border:1px solid var(--border);background:#171a1e;color:var(--text);font:inherit;border-radius:4px;}
+.in::placeholder{color:var(--faint);}
+
+/* status square + text */
+.sq{width:8px;height:8px;border-radius:2px;display:inline-block;flex:none;}
+.sq.ok{background:var(--ok);} .sq.warn{background:var(--warn);} .sq.off{background:#3b4148;} .sq.bad{background:var(--bad);}
+.stat{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);}
+
+/* count badge (squared, flat) */
+.count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 6px;
+	border-radius:3px;font-size:11.5px;font-weight:600;background:#2a2f35;color:var(--muted);border:1px solid var(--border);}
+.count.warn{background:#2e2718;color:var(--warn);border-color:#473a1f;}
+.count.ok{background:#1d2a23;color:var(--ok);border-color:#28402f;}
+
+/* layout */
+.layout{display:grid;grid-template-columns:258px 1fr;height:calc(100vh - 46px);}
+
+/* sidebar */
+.rail{background:#181b20;border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0;}
+.railhead{padding:10px 12px;border-bottom:1px solid var(--border-soft);}
+.railhead .ttl{font-size:11px;letter-spacing:.7px;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:8px;display:flex;}
+.railhead .ttl .r{margin-left:auto;color:var(--muted);letter-spacing:0;text-transform:none;font-weight:500;}
+.flist{overflow:auto;flex:1;min-height:0;padding:6px;}
+.fitem{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:4px;cursor:pointer;border-left:2px solid transparent;}
+.fitem:hover{background:#ffffff06;}
+.fitem.active{background:#ffffff0c;border-left-color:var(--accent);}
+.fitem .nm{font-weight:550;font-size:13px;}
+.fitem .ip{font-family:var(--mono);font-size:11px;color:var(--faint);}
+.fitem .rt{margin-left:auto;}
+.railfoot{padding:9px 12px;border-top:1px solid var(--border-soft);}
+
+/* main detail */
+.detail{overflow:auto;min-height:0;}
+.dbar{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);background:var(--panel);position:relative;}
+.dbar h1{font-size:15px;margin:0;font-weight:600;}
+.dbar .sub{font-size:12px;color:var(--muted);}
+.dbar .sub .mono{color:#aab4be;}
+.dbar .right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+/* apply button with clickable count */
+.applybtn{display:inline-flex;align-items:stretch;border:1px solid var(--accent);border-radius:4px;overflow:hidden;}
+.applybtn .go{background:var(--accent);color:#fff;border:0;padding:0 11px;height:30px;font:inherit;font-weight:550;cursor:pointer;}
+.applybtn .go:hover{background:var(--accent-hover);}
+.applybtn .num{background:#172026;color:#cfe0ee;border:0;border-left:1px solid var(--accent);padding:0 10px;height:30px;font:inherit;font-weight:600;cursor:pointer;}
+.applybtn .num:hover{background:#1d2932;}
+
+/* slot panel */
+.slot{margin:14px 16px;border:1px solid var(--border);border-radius:5px;background:var(--panel);}
+.slot>header{display:flex;align-items:center;gap:11px;padding:10px 13px;border-bottom:1px solid var(--border-soft);}
+.slot h2{font-size:13.5px;margin:0;font-weight:600;}
+.media{display:inline-flex;align-items:center;gap:7px;padding:3px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;color:var(--muted);background:#181c20;}
+.media .mono{color:#b6c0ca;}
+.slot .sr{margin-left:auto;display:flex;align-items:center;gap:12px;}
+.blast{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12.5px;}
+
+/* toggle (plain) */
+.sw{position:relative;width:34px;height:19px;flex:none;}
+.sw input{display:none;}
+.sw span{position:absolute;inset:0;border-radius:3px;background:#333a42;cursor:pointer;}
+.sw span::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:2px;background:#aab4be;transition:.12s;}
+.sw input:checked+span{background:var(--accent);}
+.sw input:checked+span::after{transform:translateX(15px);background:#fff;}
+
+/* settings group */
+.grp{border-top:1px solid var(--border-soft);}
+.grp:first-of-type{border-top:0;}
+.grp>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:9px;padding:9px 13px;font-weight:600;font-size:12.5px;}
+.grp>summary::-webkit-details-marker{display:none;}
+.grp .chev{color:var(--faint);font-size:10px;width:10px;}
+.grp[open] .chev{transform:rotate(90deg);}
+.grp .gc{margin-left:auto;}
+
+/* settings table */
+table.st{width:100%;border-collapse:collapse;}
+table.st thead th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);
+	font-weight:600;padding:5px 13px;border-bottom:1px solid var(--border-soft);}
+table.st td{padding:7px 13px;border-bottom:1px solid #1c2025;vertical-align:middle;}
+table.st tbody tr:last-child td{border-bottom:0;}
+table.st tbody tr:hover td{background:#ffffff04;}
+.c-apply{width:46px;} .c-eq{width:30px;text-align:center;} .c-src{width:120px;}
+.sname{font-weight:550;}
+.dev{font-family:var(--mono);font-size:12.5px;color:#aeb8c2;}
+.dev.na{color:var(--faint);}
+.eq{font-family:var(--mono);color:var(--ok);} .eq.ne{color:var(--warn);}
+/* editable target field */
+.tgt{display:inline-flex;align-items:center;height:26px;padding:0 8px;border:1px solid var(--border);border-radius:4px;
+	background:#171a1e;font-family:var(--mono);font-size:12.5px;color:var(--text);min-width:130px;}
+.tgt.change{border-color:#4a3d1f;color:var(--warn);}
+.tgt.sel{padding-right:24px;background:#171a1e url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='9' height='6' fill='none' stroke='%238a929b' stroke-width='1.5'><path d='M1 1l3.5 3.5L8 1'/></svg>") no-repeat right 8px center;}
+.tgt.off{color:var(--faint);border-style:dashed;}
+/* smart-IP octet field (4 boxes) */
+.ipf{display:inline-flex;align-items:center;gap:4px;}
+.ipf .oct{width:42px;height:26px;text-align:center;border:1px solid var(--border);background:#171a1e;color:var(--text);
+	border-radius:4px;font-family:var(--mono);font-size:12.5px;}
+.ipf .oct:focus{outline:none;border-color:var(--accent);}
+.ipf i{color:var(--faint);font-style:normal;}
+.ipf.change .oct{border-color:#4a3d1f;color:var(--warn);}
+.ipf.off .oct{border-style:dashed;color:var(--faint);background:none;}
+.ghint{font-size:11px;color:var(--faint);margin-top:3px;font-family:var(--mono);}
+/* source tag */
+.src{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;padding:2px 7px;border-radius:3px;border:1px solid var(--border);color:var(--muted);background:#1d2127;}
+.src.group{color:#9fb6c9;border-color:#2f3b45;}
+.src.override{color:#c8a455;border-color:#473a1f;background:#241f15;}
+.src.none{color:var(--faint);border-style:dashed;background:none;}
+
+/* changes popover */
+.scrim{position:fixed;inset:0;background:rgba(0,0,0,.32);}
+.pop{position:absolute;top:52px;right:16px;width:520px;background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 10px 30px -10px rgba(0,0,0,.6);}
+.pop header{display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--border-soft);font-weight:600;}
+.pop header .x{margin-left:auto;color:var(--muted);cursor:pointer;border:0;background:none;font-size:15px;}
+.pop table{width:100%;border-collapse:collapse;}
+.pop th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);font-weight:600;padding:6px 13px;border-bottom:1px solid var(--border-soft);}
+.pop td{padding:7px 13px;border-bottom:1px solid #1c2025;font-size:12.5px;}
+.pop td.v{font-family:var(--mono);}
+.pop .to{color:var(--warn);font-weight:600;}
+.pop .arrow{color:var(--faint);padding:0 4px;}
+.pop footer{display:flex;align-items:center;gap:9px;padding:11px 13px;}
+.pop footer .muted{margin-right:auto;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+	<div class="brand"><span class="mark"></span> Demeter</div>
+	<nav class="tabs">
+		<button class="tab active">Frames</button>
+		<button class="tab">Groups</button>
+		<button class="tab">Logs</button>
+		<button class="tab">Users</button>
+	</nav>
+	<div class="spacer"></div>
+	<button class="btn sm">Import / Export</button>
+	<button class="btn sm">Settings</button>
+	<div class="sep"></div>
+	<span class="meta">v2.0.2 · admin</span>
+	<button class="btn sm">Logout</button>
+</div>
+
+<div class="layout">
+	<!-- FLEET SIDEBAR -->
+	<aside class="rail">
+		<div class="railhead">
+			<div class="ttl">Frames <span class="r">6 online · 3 to apply</span></div>
+			<input class="in" style="width:100%" placeholder="Search frames…">
+		</div>
+		<div class="flist">
+			<div class="fitem active"><span class="sq ok"></span><div><div class="nm">F101 · Some frame</div><div class="ip">10.40.128.10</div></div><span class="rt count warn">3</span></div>
+			<div class="fitem"><span class="sq ok"></span><div><div class="nm">F102 · MCR Main</div><div class="ip">10.40.128.11</div></div><span class="rt count ok">0</span></div>
+			<div class="fitem"><span class="sq ok"></span><div><div class="nm">F103 · Studio A</div><div class="ip">10.40.128.12</div></div><span class="rt count warn">7</span></div>
+			<div class="fitem"><span class="sq off"></span><div><div class="nm">F104 · Studio B</div><div class="ip">10.40.128.13</div></div><span class="rt count">—</span></div>
+			<div class="fitem"><span class="sq bad"></span><div><div class="nm">F105 · OB Truck</div><div class="ip">10.40.128.14</div></div><span class="rt count">!</span></div>
+			<div class="fitem"><span class="sq ok"></span><div><div class="nm">F106 · Edit 3</div><div class="ip">10.40.128.15</div></div><span class="rt count ok">0</span></div>
+		</div>
+		<div class="railfoot"><button class="btn sm" style="width:100%">+ Add frame</button></div>
+	</aside>
+
+	<!-- DETAIL -->
+	<main class="detail">
+		<div class="dbar">
+			<div>
+				<h1>F101 · Some frame</h1>
+				<div class="sub"><span class="mono">10.40.128.10</span> · Group Test</div>
+			</div>
+			<div class="right">
+				<span class="stat"><span class="sq ok"></span> Online</span>
+				<select class="sel"><option>Scan only</option><option>Scan &amp; blast</option><option>Ignore</option></select>
+				<!-- Apply button shows in scan-only mode; the count is clickable -->
+				<div class="applybtn">
+					<button class="go">Apply changes</button>
+					<button class="num" title="Click to review what will change">3 ▾</button>
+				</div>
+				<select class="sel"><option>Auto-reboot: default</option></select>
+				<button class="btn sm">Reboot</button>
+				<button class="btn sm danger">Delete</button>
+			</div>
+		</div>
+
+		<section class="slot">
+			<header>
+				<span class="chev" style="cursor:pointer">▾</span>
+				<h2>Slot 01</h2>
+				<span class="media"><span class="sq ok"></span> Media 1 <span class="mono">10.100.128.10</span> · UP</span>
+				<span class="media"><span class="sq ok"></span> Media 2 <span class="mono">10.101.128.10</span> · UP</span>
+				<div class="sr">
+					<span class="blast">Blast <label class="sw"><input type="checkbox" checked><span></span></label></span>
+					<button class="btn sm">Reboot</button>
+				</div>
+			</header>
+
+			<details class="grp" open>
+				<summary><span class="chev">▸</span> Ethernet 1 <span class="gc count warn">1</span></summary>
+				<table class="st">
+					<thead><tr>
+						<th class="c-apply">Apply</th><th>Setting</th><th>On device</th><th class="c-eq"></th><th>Target</th><th class="c-src">Source</th>
+					</tr></thead>
+					<tbody>
+						<tr><td><label class="sw"><input type="checkbox" checked><span></span></label></td>
+							<td class="sname">Mode</td><td class="dev">Static</td><td class="c-eq eq">=</td>
+							<td><span class="tgt sel">Static</span></td><td><span class="src group">Group</span></td></tr>
+						<tr><td><label class="sw"><input type="checkbox" checked><span></span></label></td>
+							<td class="sname">IP</td><td class="dev">10.100.128.10</td><td class="c-eq eq ne">≠</td>
+							<td><span class="ipf change"><input class="oct" value="10"><i>.</i><input class="oct" value="100"><i>.</i><input class="oct" value="130"><i>.</i><input class="oct" value="10"></span><div class="ghint">group → 10.100.128.10</div></td>
+							<td><span class="src override">Override</span></td></tr>
+						<tr><td><label class="sw"><input type="checkbox" checked><span></span></label></td>
+							<td class="sname">Gateway</td><td class="dev">10.100.128.1</td><td class="c-eq eq">=</td>
+							<td><span class="ipf"><input class="oct" value="10"><i>.</i><input class="oct" value="100"><i>.</i><input class="oct" value="128"><i>.</i><input class="oct" value="1"></span></td>
+							<td><span class="src group">Group</span></td></tr>
+						<tr><td><label class="sw"><input type="checkbox"><span></span></label></td>
+							<td class="sname">Netmask</td><td class="dev">255.255.254.0</td><td class="c-eq"></td>
+							<td><span class="ipf off"><input class="oct" value="255" disabled><i>.</i><input class="oct" value="255" disabled><i>.</i><input class="oct" value="254" disabled><i>.</i><input class="oct" value="0" disabled></span></td>
+							<td><span class="src none">—</span></td></tr>
+					</tbody>
+				</table>
+			</details>
+
+			<details class="grp"><summary><span class="chev">▸</span> Ethernet 2 <span class="gc faint">in sync</span></summary></details>
+
+			<details class="grp" open>
+				<summary><span class="chev">▸</span> Reference / PTP <span class="gc count warn">2</span></summary>
+				<table class="st">
+					<thead><tr><th class="c-apply">Apply</th><th>Setting</th><th>On device</th><th class="c-eq"></th><th>Target</th><th class="c-src">Source</th></tr></thead>
+					<tbody>
+						<tr><td><label class="sw"><input type="checkbox" checked><span></span></label></td>
+							<td class="sname">PTP Domain</td><td class="dev">127</td><td class="c-eq eq">=</td>
+							<td><span class="tgt">127</span></td><td><span class="src group">Group</span></td></tr>
+						<tr><td><label class="sw"><input type="checkbox" checked><span></span></label></td>
+							<td class="sname">PTP Preference</td><td class="dev na">—</td><td class="c-eq eq ne">≠</td>
+							<td><span class="tgt sel change">Best</span></td><td><span class="src group">Group</span></td></tr>
+						<tr><td><label class="sw"><input type="checkbox" checked><span></span></label></td>
+							<td class="sname">Enable PTP on Eth 1</td><td class="dev">Off</td><td class="c-eq eq ne">≠</td>
+							<td><span class="tgt change">On</span></td><td><span class="src override">Override</span></td></tr>
+					</tbody>
+				</table>
+			</details>
+
+			<details class="grp"><summary><span class="chev">▸</span> NMOS <span class="gc faint">in sync</span></summary></details>
+			<details class="grp"><summary><span class="chev">▸</span> Interop <span class="gc faint">in sync</span></summary></details>
+			<details class="grp"><summary><span class="chev">▸</span> Link Control <span class="gc faint">in sync</span></summary></details>
+		</section>
+	</main>
+</div>
+
+<!-- CHANGES POPUP (opened by clicking the "3" count) -->
+<div class="scrim"></div>
+<div class="pop">
+	<header>Pending changes — Slot 01 <button class="x">✕</button></header>
+	<table>
+		<thead><tr><th>Setting</th><th>Current</th><th>Target</th><th>Source</th></tr></thead>
+		<tbody>
+			<tr><td>Ethernet 1 · IP</td><td class="v">10.100.128.10</td><td class="v"><span class="arrow">→</span><span class="to">10.100.130.10</span></td><td><span class="src override">Override</span></td></tr>
+			<tr><td>PTP · Preference</td><td class="v faint">—</td><td class="v"><span class="arrow">→</span><span class="to">Best</span></td><td><span class="src group">Group</span></td></tr>
+			<tr><td>PTP · Enable on Eth 1</td><td class="v">Off</td><td class="v"><span class="arrow">→</span><span class="to">On</span></td><td><span class="src override">Override</span></td></tr>
+		</tbody>
+	</table>
+	<footer>
+		<span class="muted">3 settings will be written to the card</span>
+		<button class="btn sm">Cancel</button>
+		<button class="btn sm primary">Apply 3 changes</button>
+	</footer>
+</div>
+
+</body>
+</html>

@@ -73,6 +73,10 @@ func (h *Hub) Serve(ctx context.Context, conn *websocket.Conn, session *auth.Ses
 		c.trySend(encode(chFrames, h.engine.FramesSnapshot()))
 		c.trySend(encode(chGroups, h.engine.GroupsSnapshot()))
 	}
+	// Replay recent log history (one batch) so the Logs page isn't empty on open.
+	if logs := h.recentLogs(); len(logs) > 0 {
+		c.trySend(encode(chLogs, logs))
+	}
 
 	// On first run, show the generated admin credentials — but ONLY to an
 	// authenticated admin connecting over loopback (the desktop window), so the

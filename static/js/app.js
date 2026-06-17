@@ -6,6 +6,7 @@ let groups;
 document.addEventListener('DOMContentLoaded', () => {
 	backend.on('frames', drawFrames);
 	backend.on('log', doLog);
+	backend.on('logs', logs => { if (Array.isArray(logs)) logs.forEach(doLog); });
 	backend.on('slotInfo', drawSlotInfo);
 	backend.on('frameStatus', doFrameStatus);
 	backend.on('groups', drawGroups);
@@ -31,6 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
 	on('click', '.tabSelect', showTab)
 	on('click', '#addFrameIPBtn', addFrame);
 	on('click', '#addGroupBtn', addGroup);
+	on('click', '#clearLogs', () => { document.getElementById('logs').innerHTML = ''; });
+	on('change', '#logLevelFilter', applyLogFilter);
+	on('input', '#logTextFilter', applyLogFilter);
 
 	// Granular, unified import/export.
 	on('click', '#importExport', () => backend.send('getExport')); // refresh export tree from authoritative state
@@ -886,9 +890,34 @@ function doLog(log) {
 		`<span class="logLevel ${colourClass}">(${log.level || ''})</span>` +
 		`<span class="${colourClass} logCatagory">${escapeHTML(log.category || '')} </span>` +
 		`<span class="whiteLog">${escapeHTML(log.message || '')}</span>`;
+	if (!logPasses(_log)) _log.classList.add('d-none'); // respect the active front-end filter
 	_logs.insertBefore(_log, _logs.firstChild);
 	const maxLogs = 499;
 	while (_logs.childElementCount > maxLogs) _logs.lastElementChild.remove();
+}
+
+const LOG_LEVEL_ORDER = { D: 0, I: 1, W: 2, E: 3 };
+
+// logPasses reports whether a log row passes the current front-end filters
+// (minimum level + free-text). The server sends every log; filtering is local.
+function logPasses(_div) {
+	const _lvl = document.getElementById('logLevelFilter');
+	const _txt = document.getElementById('logTextFilter');
+	const min = _lvl ? _lvl.value : 'ALL';
+	const txt = _txt ? _txt.value.trim().toLowerCase() : '';
+	if (min && min !== 'ALL') {
+		const lvl = _div.getAttribute('data-level') || 'D';
+		if ((LOG_LEVEL_ORDER[lvl] ?? 0) < (LOG_LEVEL_ORDER[min] ?? 0)) return false;
+	}
+	if (txt && !_div.textContent.toLowerCase().includes(txt)) return false;
+	return true;
+}
+
+// applyLogFilter re-applies the filters to every currently-rendered log row.
+function applyLogFilter() {
+	const _logs = document.getElementById('logs');
+	if (!_logs) return;
+	for (const _div of _logs.children) _div.classList.toggle('d-none', !logPasses(_div));
 }
 
 function colourToClass(c) {

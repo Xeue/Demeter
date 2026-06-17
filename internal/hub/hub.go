@@ -55,7 +55,13 @@ type Hub struct {
 
 	mu      sync.RWMutex
 	clients map[*Client]struct{}
+
+	logMu  sync.Mutex
+	logBuf []logging.Event // recent log events, replayed to a client on connect
 }
+
+// maxLogBuffer bounds the in-memory log history replayed to new clients.
+const maxLogBuffer = 500
 
 // New creates a hub. SetEngine must be called before clients connect.
 func New(a *auth.Auth) *Hub {
@@ -181,7 +187,22 @@ func (h *Hub) FrameError(frameIP, errMsg string) {
 // --- logging emitter ---
 
 // Log fans a structured log event to clients (lossy).
-func (h *Hub) Log(e logging.Event) { h.emitLossy(chLog, e) }
+func (h *Hub) Log(e logging.Event) {
+	h.logMu.Lock()
+	h.logBuf = append(h.logBuf, e)
+	if len(h.logBuf) > maxLogBuffer {
+		h.logBuf = h.logBuf[1:]
+	}
+	h.logMu.Unlock()
+	h.emitLossy(chLog, e)
+}
+
+// recentLogs returns a copy of the buffered log history (oldest first).
+func (h *Hub) recentLogs() []logging.Event {
+	h.logMu.Lock()
+	defer h.logMu.Unlock()
+	return append([]logging.Event(nil), h.logBuf...)
+}
 
 // broadcastUsers sends the user list to all clients (admin UI).
 func (h *Hub) broadcastUsers() {

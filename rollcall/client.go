@@ -24,6 +24,20 @@ const DefaultPort = 2050
 // pipelining (set 0 for unbounded — not recommended until tested on hardware).
 const DefaultMaxInFlight = 1
 
+// Mode selects the RollCall transport dialect.
+type Mode int
+
+const (
+	// Connected is the persistent Control-Panel dialect: opcodes 0x45/0x46/0x47,
+	// uint32 command ids, an IDENTITY/OPEN session, and unsolicited notifies. The
+	// card address carries a non-zero session port.
+	Connected Mode = iota
+	// Unconnected is the RollTrak dialect: opcodes 0x0b/0x0c, uint16 command ids,
+	// a one-shot 0x15 login, and PORT-0 addressing (unit=(addr<<8)|slot). This is
+	// what Demeter's addressing model matches and what the legacy app used.
+	Unconnected
+)
+
 // Client is a RollCall client multiplexed over a single TCP connection to one
 // frame. It is safe for concurrent use: many goroutines may call Get/Set at once.
 //
@@ -53,6 +67,8 @@ type Client struct {
 	readErr   error
 
 	writeTimeout time.Duration
+	mode         Mode
+	usetOp       Opcode // opcode used for an unconnected SET (best-guess; configurable)
 }
 
 type replyKey struct {
@@ -66,17 +82,29 @@ type Option func(*config)
 type config struct {
 	port         int
 	self         Addr
+	selfSet      bool
 	notifyBuf    int
 	writeTimeout time.Duration
 	maxInFlight  int
 	dialer       *net.Dialer
+	mode         Mode
+	usetOp       Opcode
 }
 
 // WithPort overrides the TCP port (default DefaultPort).
 func WithPort(p int) Option { return func(c *config) { c.port = p } }
 
 // WithSelf sets the client's own RollCall source address.
-func WithSelf(a Addr) Option { return func(c *config) { c.self = a } }
+func WithSelf(a Addr) Option { return func(c *config) { c.self = a; c.selfSet = true } }
+
+// WithMode selects the transport dialect (default Connected).
+func WithMode(m Mode) Option { return func(c *config) { c.mode = m } }
+
+// WithUnconnectedSetOpcode overrides the opcode used for an unconnected-mode SET.
+// No unconnected write was ever captured, so the default (OpUReq, 0x0b — the read
+// request opcode reused with a value body) is a best guess; set this to try
+// another candidate (e.g. 0x0d) against a non-air frame without a rebuild.
+func WithUnconnectedSetOpcode(op Opcode) Option { return func(c *config) { c.usetOp = op } }
 
 // WithNotifyBuffer sets the buffer size of the Notify channel (default 64).
 func WithNotifyBuffer(n int) Option { return func(c *config) { c.notifyBuf = n } }
@@ -99,6 +127,7 @@ func defaults() *config {
 		writeTimeout: 5 * time.Second,
 		maxInFlight:  DefaultMaxInFlight,
 		dialer:       &net.Dialer{},
+		usetOp:       OpUReq,
 	}
 }
 
@@ -127,21 +156,46 @@ func NewConn(conn net.Conn, opts ...Option) *Client {
 }
 
 func newClient(conn net.Conn, cfg *config) *Client {
+	self := cfg.self
+	// In unconnected mode the reference client (RollTrak) sources from
+	// net0:unit0:port0x00ff; default to that unless the caller set one.
+	if cfg.mode == Unconnected && !cfg.selfSet {
+		self = Addr{Net: 0, Unit: 0, Port: 0x00ff}
+	}
 	c := &Client{
 		conn:         conn,
 		br:           bufio.NewReader(conn),
-		self:         cfg.self,
+		self:         self,
 		pending:      make(map[replyKey][]chan Message),
 		ackWaiters:   make(map[Addr][]chan struct{}),
 		notifyCh:     make(chan Message, cfg.notifyBuf),
 		done:         make(chan struct{}),
 		writeTimeout: cfg.writeTimeout,
+		mode:         cfg.mode,
+		usetOp:       cfg.usetOp,
+	}
+	if c.usetOp == 0 {
+		c.usetOp = OpUReq
 	}
 	if cfg.maxInFlight > 0 {
 		c.sem = make(chan struct{}, cfg.maxInFlight)
 	}
 	go c.readLoop()
+	if c.mode == Unconnected {
+		_ = c.sendLogin() // one-shot 0x15 broadcast login (RollTrak-style)
+	}
 	return c
+}
+
+// sendLogin sends the unconnected-mode broadcast login (opcode 0x15), copied
+// from the RollTrak capture: inner = 15 00 00, dst/src the broadcast handles.
+func (c *Client) sendLogin() error {
+	return c.write(Message{
+		Dst:    Addr{Net: 0, Unit: 0, Port: 0x00ff},
+		Src:    Addr{Net: 0, Unit: 0, Port: 0x0001},
+		Opcode: OpLogin,
+		Raw:    []byte{0x00},
+	})
 }
 
 // acquire takes an in-flight slot, respecting ctx and connection close.
@@ -181,7 +235,11 @@ func (c *Client) Get(ctx context.Context, unit Addr, cmdID uint32) (Value, error
 	ch := c.register(unit, cmdID)
 	defer c.unregister(unit, cmdID, ch)
 
-	if err := c.write(Message{Dst: unit, Src: c.self, Opcode: OpGet, CmdID: cmdID}); err != nil {
+	op := OpGet
+	if c.mode == Unconnected {
+		op = OpUReq
+	}
+	if err := c.write(Message{Dst: unit, Src: c.self, Opcode: op, CmdID: cmdID}); err != nil {
 		return Value{}, err
 	}
 	return c.await(ctx, ch)
@@ -224,7 +282,20 @@ func (c *Client) Set(ctx context.Context, unit Addr, cmdID uint32, v Value) (Val
 	ch := c.register(unit, cmdID)
 	defer c.unregister(unit, cmdID, ch)
 
-	if err := c.write(Message{Dst: unit, Src: c.self, Opcode: OpSet, CmdID: cmdID, Value: v}); err != nil {
+	var msg Message
+	if c.mode == Unconnected {
+		// Best-guess unconnected SET: the configured opcode (default 0x0b, the
+		// read-request opcode) carrying the value body in the same layout as the
+		// captured 0x0c reply (cmd u16, dataType u16, reserved u32, value).
+		// UNCONFIRMED (no write was captured) — the blast verify-and-retry flags
+		// it if the device doesn't apply it; try another opcode via config if so.
+		body := binary.BigEndian.AppendUint16(nil, uint16(cmdID))
+		body = append(body, v.encodeUnconnected()...)
+		msg = Message{Dst: unit, Src: c.self, Opcode: c.usetOp, Raw: body}
+	} else {
+		msg = Message{Dst: unit, Src: c.self, Opcode: OpSet, CmdID: cmdID, Value: v}
+	}
+	if err := c.write(msg); err != nil {
 		return Value{}, err
 	}
 	return c.await(ctx, ch)
@@ -344,9 +415,25 @@ func (c *Client) unregister(unit Addr, cmdID uint32, ch chan Message) {
 	}
 }
 
-// dispatch delivers m to one waiter for its (Src, CmdID); returns true if matched.
+// dispatch delivers m to one waiter; returns true if matched. It tries an exact
+// (Src, CmdID) match first, then falls back to a waiter registered against the
+// zero "self/controller" address (Unit 0). A read addressed to unit 0x0000 (the
+// frame-address discovery, cmd 17044/16482) is answered by the real controller
+// unit (e.g. 0x1200), so the reply's Src differs from the request's Dst —
+// confirmed on hardware (rcprobe). Card reads, whose reply Src equals the
+// request Dst, still match exactly and are unaffected.
 func (c *Client) dispatch(m Message) bool {
-	k := replyKey{src: m.Src, cmd: m.CmdID}
+	if c.deliver(replyKey{src: m.Src, cmd: m.CmdID}, m) {
+		return true
+	}
+	if (m.Src != Addr{}) {
+		return c.deliver(replyKey{src: Addr{}, cmd: m.CmdID}, m)
+	}
+	return false
+}
+
+// deliver hands m to one waiter for key k; returns true if one was waiting.
+func (c *Client) deliver(k replyKey, m Message) bool {
 	c.mu.Lock()
 	q := c.pending[k]
 	if len(q) == 0 {
@@ -386,7 +473,7 @@ func (c *Client) readLoop() {
 			return
 		}
 		switch m.Opcode {
-		case OpReply:
+		case OpReply, OpUReply:
 			// Satisfy an in-flight GET/SET if one is waiting; otherwise it's an
 			// unsolicited update — hand it to whoever is draining Notify.
 			if !c.dispatch(m) {
@@ -398,6 +485,10 @@ func (c *Client) readLoop() {
 		case OpAck:
 			// Acknowledges an OPEN; wake any waiter for that unit.
 			c.dispatchAck(m.Src)
+		case OpNack:
+			// Negative ack with no command id — can't be routed to a waiter, so
+			// the matching GET falls through to its timeout. (Absent cards reply
+			// with a normal "No Unit Fitted" OpUReply, not a NACK.)
 		default:
 			// IDENT / other control frames are currently informational.
 		}

@@ -143,3 +143,6 @@ main.js
 /demeter*.exe
 /demeter-v*
 /Demeter.app/
+/Demeter-v*
+/rcprobe
+/rcprobe*

@@ -87,7 +87,15 @@ func Build(ctx context.Context, cfg config.Config, workers int) (*App, error) {
 			}
 		},
 	}
-	mgr := manager.New(ctx, scanner, device.RollcallDialer{}, st, h, st.Frames(), st.Groups(), cfg.ScanInterval(), autoOpts)
+	dialer := device.RollcallDialer{
+		Mode:          device.ParseMode(cfg.RollcallMode),
+		SetOpcode:     device.ParseSetOpcode(cfg.RollcallSetOpcode),
+		Port:          cfg.RollcallPort,
+		Handshake:     cfg.RollcallHandshake,
+		PerGetTimeout: cfg.RollcallTimeout(),
+	}
+	slog.Info("rollcall connection", "mode", cfg.RollcallMode, "port", cfg.RollcallPort, "setOpcode", cfg.RollcallSetOpcode, "handshake", cfg.RollcallHandshake, "getTimeoutMs", cfg.RollcallTimeoutMs)
+	mgr := manager.New(ctx, scanner, dialer, st, h, st.Frames(), st.Groups(), cfg.ScanInterval(), autoOpts)
 	mgr.SetIntervalPersister(func(seconds int) {
 		cfg.ScanIntervalSeconds = seconds
 		if err := cfg.Save(); err != nil {

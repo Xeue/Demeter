@@ -30,6 +30,14 @@ type Config struct {
 	// large systems to reduce load. Clamped to [1, 3600] (see ScanInterval).
 	ScanIntervalSeconds int `json:"scanIntervalSeconds"`
 
+	// RollCall device-connection tuning, for diagnosing connectivity (defaults
+	// reproduce the built-in behaviour).
+	RollcallMode      string `json:"rollcallMode"`      // "unconnected" (default, RollTrak-style, port 0) or "connected" (Control-Panel, notifies)
+	RollcallPort      int    `json:"rollcallPort"`      // TCP port; 0 => 2050
+	RollcallHandshake bool   `json:"rollcallHandshake"` // connected mode only: send the IDENTITY handshake on connect
+	RollcallTimeoutMs int    `json:"rollcallTimeoutMs"` // per-GET timeout (ms); 0 => 2000. Raise for slow/busy frames
+	RollcallSetOpcode string `json:"rollcallSetOpcode"` // unconnected-mode SET opcode, hex (e.g. "0b" default, "0d"). Best-guess write — try alternatives if blasting won't apply
+
 	// Not persisted (set from flags/env).
 	DataDir string `json:"-"`
 	TLSCert string `json:"-"`
@@ -47,6 +55,7 @@ func Defaults() Config {
 		AutoReboot:                false,
 		AutoRebootCooldownSeconds: 120,
 		ScanIntervalSeconds:       3,
+		RollcallMode:              "unconnected",
 	}
 }
 
@@ -83,6 +92,15 @@ func ClampScanInterval(seconds int) int {
 // ScanInterval returns the poll interval as a duration (clamped).
 func (c Config) ScanInterval() time.Duration {
 	return time.Duration(ClampScanInterval(c.ScanIntervalSeconds)) * time.Second
+}
+
+// RollcallTimeout returns the per-GET timeout override, or 0 to keep the
+// device's built-in default.
+func (c Config) RollcallTimeout() time.Duration {
+	if c.RollcallTimeoutMs <= 0 {
+		return 0
+	}
+	return time.Duration(c.RollcallTimeoutMs) * time.Millisecond
 }
 
 // Load reads dataDir/config.json, migrating dataDir/config.conf if present and

@@ -5,6 +5,8 @@ replacement for shelling out to the Windows-only `RollTrak.exe`.
 
 Import path: `github.com/Xeue/Demeter/rollcall`
 
+**Picking up driver dev?** Start with [`../docs/ROLLCALL_HANDOVER.md`](../docs/ROLLCALL_HANDOVER.md) — current status, prioritized tasks (incl. the gating hardware probe for push), invariants, and how to test.
+
 This package is self-contained (its own `go.mod`) so it can be tested in isolation.
 To fold it into the single-module Go rewrite, delete `rollcall/go.mod`; the import
 path stays the same.

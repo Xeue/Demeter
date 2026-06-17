@@ -200,13 +200,17 @@ func TestMaxInFlightBound(t *testing.T) {
 			mu.Unlock()
 			go func(req Message) {
 				time.Sleep(20 * time.Millisecond)
+				// Mark processing done BEFORE writing the reply: the reply is in
+				// transit until the client reads it (when it frees its in-flight
+				// slot), so decrementing after the write races with the client
+				// issuing its next request and overcounts.
+				mu.Lock()
+				inflight--
+				mu.Unlock()
 				reply := Message{Dst: req.Src, Src: req.Dst, Opcode: OpReply, CmdID: req.CmdID, Value: Int(req.CmdID)}
 				wmu.Lock()
 				srvConn.Write(reply.Encode())
 				wmu.Unlock()
-				mu.Lock()
-				inflight--
-				mu.Unlock()
 			}(req)
 		}
 	}()

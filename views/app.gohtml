@@ -29,6 +29,7 @@
             </a>
             <button class="active nav-link text-light tabSelect" data-tab="frames">Frames</button>
             <button class="nav-link text-light tabSelect" data-tab="groups">Group Configs</button>
+            <button class="nav-link text-light tabSelect" data-tab="logs">Logs</button>
             {{if .IsAdmin}}<button class="nav-link text-light tabSelect" data-tab="users">Users</button>{{end}}
             <div class="d-flex m-auto pb-1">
                 <button class="align-self-center btn btn-primary btn-sm h-100" id="importExport" data-bs-toggle="modal" data-bs-target="#importPop">Import/Export</button>
@@ -85,7 +86,22 @@
                 <article id="usersCont" class="p-2"></article>
             </section>
             {{end}}
-            <section id="logs" class="h-100 overflow-auto tab d-none"></section>
+            <section class="tab h-100 d-none d-flex flex-column" data-tab="logs">
+                <div class="p-2 d-flex gap-2 align-items-center">
+                    <button class="btn btn-secondary btn-sm" id="clearLogs">Clear</button>
+                    <label for="logLevelFilter" class="text-light">Level</label>
+                    <select id="logLevelFilter" class="form-select form-select-sm w-auto" title="Show this level and above">
+                        <option value="ALL">All</option>
+                        <option value="D">Debug+</option>
+                        <option value="I">Info+</option>
+                        <option value="W">Warn+</option>
+                        <option value="E">Error</option>
+                    </select>
+                    <input id="logTextFilter" class="form-control form-control-sm w-auto" type="search" placeholder="Filter text…">
+                    <span class="navbar-text text-light ms-auto">Server log — newest first, last 500 lines</span>
+                </div>
+                <section id="logs" class="overflow-auto flex-grow-1 px-2"></section>
+            </section>
         </main>
         <article id="importPop" class="modal fade" tabindex="-1">
             <section class="modal-dialog modal-xl modal-dialog-centered">
