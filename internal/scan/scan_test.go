@@ -302,8 +302,11 @@ func TestCheckFrameEndToEnd(t *testing.T) {
 	if sl.Ins != 4 || sl.Outs != 8 {
 		t.Errorf("ins/outs = %d/%d want 4/8", sl.Ins, sl.Outs)
 	}
-	if sl.Active["4108"].Int != 1 {
-		t.Errorf("active 4108 = %v want 1", sl.Active["4108"])
+	// After the blast, active is reconciled from the device's SET echo to the
+	// just-applied target (0), not the stale pre-blast 1 — so the UI clears at
+	// once instead of waiting for the next re-read.
+	if sl.Active["4108"].Int != 0 {
+		t.Errorf("active 4108 = %v want 0 (reconciled from SET echo)", sl.Active["4108"])
 	}
 	// mode differs (group 0 vs active 1) and 4108 is a frame command -> a SET to
 	// the frame at addr 10 slot 01 must have been recorded.

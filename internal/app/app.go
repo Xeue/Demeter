@@ -8,11 +8,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -89,8 +91,17 @@ func Build(ctx context.Context, cfg config.Config, workers int) (*App, error) {
 	}
 	var dialer device.Dialer
 	if cfg.Mock {
-		dialer = &device.MockDialer{}
-		slog.Warn("MOCK MODE: simulating frames/cards in-process (no hardware)")
+		md := &device.MockDialer{Cards: envInt("DEMETER_MOCK_CARDS", 0)}
+		if off := os.Getenv("DEMETER_MOCK_OFFLINE"); off != "" {
+			md.Offline = map[string]bool{}
+			for _, ip := range strings.Split(off, ",") {
+				if ip = strings.TrimSpace(ip); ip != "" {
+					md.Offline[ip] = true
+				}
+			}
+		}
+		dialer = md
+		slog.Warn("MOCK MODE: simulating frames/cards in-process (no hardware)", "offline", os.Getenv("DEMETER_MOCK_OFFLINE"))
 	} else {
 		dialer = device.RollcallDialer{
 			Mode:          device.ParseMode(cfg.RollcallMode),
@@ -124,6 +135,16 @@ func (a *App) Bootstrap() error { return a.Auth.Bootstrap() }
 // Version returns the build version.
 func (a *App) Version() string { return version() }
 
+// envInt reads an integer from an environment variable, falling back to def.
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
 // startBackground launches the persistence, hub and poll-loop goroutines.
 func (a *App) startBackground(ctx context.Context) {
 	go a.Store.Run(ctx)
@@ -134,8 +155,11 @@ func (a *App) startBackground(ctx context.Context) {
 		// it "come online" with cards on the first scan. Skip if frames already
 		// exist (e.g. from a previous mock run).
 		if len(a.Mgr.FramesSnapshot()) == 0 {
-			a.Mgr.AddFrame("192.168.99.1", "1", "Mock Frame", "", "ucp")
-			a.Mgr.AddFrame("192.168.99.2", "2", "Mock Frame 2", "", "ucp")
+			n := envInt("DEMETER_MOCK_FRAMES", 2)
+			for i := 1; i <= n; i++ {
+				ip := fmt.Sprintf("192.168.99.%d", i)
+				a.Mgr.AddFrame(ip, strconv.Itoa(i), fmt.Sprintf("Mock Frame %d", i), "", "ucp")
+			}
 		}
 	}
 }

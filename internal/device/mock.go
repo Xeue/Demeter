@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Xeue/Demeter/internal/commandsdb"
 	"github.com/Xeue/Demeter/internal/model"
@@ -22,7 +23,9 @@ import (
 // Every dialed frame IP gets its own frame with Cards populated cards in slots
 // 1..Cards; the rest report "No Unit Fitted".
 type MockDialer struct {
-	Cards int // cards per frame (default 6)
+	Cards   int             // cards per frame (default 6)
+	Offline map[string]bool // frame IPs that should fail to dial (simulate an unreachable frame)
+	Latency time.Duration   // artificial per-batch delay (simulate real network round-trips)
 
 	mu       sync.Mutex
 	defaults map[uint32]model.Value // per-command catalogue default, shared by all cards
@@ -53,15 +56,18 @@ func (d *MockDialer) Dial(_ context.Context, ip string) (Device, error) {
 	if d.frames == nil {
 		d.init()
 	}
+	if d.Offline[ip] {
+		return nil, ErrFrameUnreachable // simulate an unreachable/offline frame
+	}
 	if c := d.cardByIP[ip]; c != nil {
-		return &mockDevice{card: c}, nil
+		return &mockDevice{card: c, latency: d.Latency}, nil
 	}
 	f := d.frames[ip]
 	if f == nil {
 		f = d.buildFrame(ip)
 		d.frames[ip] = f
 	}
-	return &mockDevice{frame: f}, nil
+	return &mockDevice{frame: f, latency: d.Latency}, nil
 }
 
 func (d *MockDialer) init() {
@@ -104,8 +110,9 @@ func (d *MockDialer) buildFrame(ip string) *mockFrame {
 // --- mock device ---
 
 type mockDevice struct {
-	frame *mockFrame // set when this is the frame connection
-	card  *mockCard  // set when this is a direct-to-card connection
+	frame   *mockFrame // set when this is the frame connection
+	card    *mockCard  // set when this is a direct-to-card connection
+	latency time.Duration
 }
 
 func (m *mockDevice) Get(_ context.Context, addr, slot string, cmd uint32) (model.Value, error) {
@@ -139,6 +146,13 @@ func (m *mockDevice) Get(_ context.Context, addr, slot string, cmd uint32) (mode
 }
 
 func (m *mockDevice) BatchGet(ctx context.Context, addr, slot string, cmds []uint32) (map[uint32]model.Value, map[uint32]error) {
+	if m.latency > 0 {
+		select {
+		case <-time.After(m.latency):
+		case <-ctx.Done():
+			return map[uint32]model.Value{}, map[uint32]error{}
+		}
+	}
 	vals := make(map[uint32]model.Value, len(cmds))
 	errs := map[uint32]error{}
 	for _, cmd := range cmds {

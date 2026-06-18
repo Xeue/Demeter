@@ -22,9 +22,10 @@ Once the card is reachable it will get and set settings directly to the card.
 ## Dev
 
 ### Go server (current)
-Demeter now ships as a headless Go service that speaks the RollCall protocol
-natively (no `rolltrak.exe`) and hosts the existing web GUI over HTTP +
-WebSocket. The legacy Electron/TypeScript app is still in the tree for reference.
+Demeter ships as a headless Go service that speaks the RollCall protocol
+natively (no `rolltrak.exe`) and hosts the web GUI over HTTP + WebSocket. The
+old Electron/TypeScript app has been removed from `main`; it is preserved on the
+`legacy` branch (`git checkout legacy`) for reference only.
 
 - Build: `go build ./cmd/demeter`
 - Run: `./demeter` (defaults to `:8080`, data in `~/Documents/DemeterData`)
@@ -83,10 +84,9 @@ native protocol client. The RollCall address packing, connect handshake and
 offline-unit signal are isolated in `internal/device/{addr,session,offline}.go`
 pending hardware confirmation (see `docs/ROLLCALL_PROTOCOL.md`).
 
-### Legacy Electron app
-Download source, "npm install" (or yarn or any other packagemanager of your choice)
-To run in dev, "npm start"
-To build, first comiple the typescript to js, "npm run compile"
-Then build "npm run build"
+### Legacy Electron app (removed)
+The original Electron/TypeScript app (and its `npm`/`electron-builder` toolchain)
+has been removed from `main`. It lives on the `legacy` branch if you ever need it:
+`git checkout legacy`.
 
 ## Thing's we've noticed

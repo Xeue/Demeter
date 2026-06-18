@@ -329,16 +329,25 @@ func (s *Scanner) scanSlot(ctx context.Context, frame *model.Frame, slot, addres
 	// identity is about to change: defer the direct bulk push (which would target
 	// the about-to-change IP) until a later cycle once the IP has settled.
 	failed := map[string]string{}
+	applied := map[string]model.Value{}
 	deferDirect := len(frameCommands) > 0
 	if len(frameCommands) > 0 {
-		for k, v := range s.doCommands(ctx, conns, frameCommands, frameTakes, frameIP, address, slotHex) {
+		ap, fl := s.doCommands(ctx, conns, frameCommands, frameTakes, frameIP, address, slotHex)
+		for k, v := range ap {
+			applied[k] = v
+		}
+		for k, v := range fl {
 			failed[k] = v
 		}
 	}
 	directSent := false
 	switch {
 	case !deferDirect && (cardAUP.String() == "UP" || cardBUP.String() == "UP"):
-		for k, v := range s.doCommands(ctx, conns, cardCommands, cardTakes, requestIP, "30", "00") {
+		ap, fl := s.doCommands(ctx, conns, cardCommands, cardTakes, requestIP, "30", "00")
+		for k, v := range ap {
+			applied[k] = v
+		}
+		for k, v := range fl {
 			failed[k] = v
 		}
 		directSent = true
@@ -352,12 +361,22 @@ func (s *Scanner) scanSlot(ctx context.Context, frame *model.Frame, slot, addres
 	}
 
 	// Reboot needed = restart-flagged commands we actually sent this cycle.
+	// (Computed BEFORE the active merge below: rebootReasons uses sl.Active as the
+	// pre-blast "from" value for its from→to tooltip.)
 	reasons := rebootReasons(frameCommands, sl.Active, restart)
 	if directSent {
 		reasons = append(reasons, rebootReasons(cardCommands, sl.Active, restart)...)
 	}
 	sl.RebootNeeded = len(reasons) > 0
 	sl.RebootReasons = reasons
+
+	// Reconcile active with the device's post-SET echo so the emitted slotInfo
+	// reflects reality immediately — rows clear to green and every UI pending
+	// count drops now, instead of staying stale until the next (possibly slow)
+	// re-read. Deferred card commands aren't in `applied`, so they stay pending.
+	for cmd, v := range applied {
+		sl.Active[cmd] = v
+	}
 	s.Events.SlotInfo(frameIP, frame, slot, sl)
 }
 

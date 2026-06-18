@@ -1,7 +1,9 @@
 package hub
 
 import (
+	"hash/fnv"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/Xeue/Demeter/internal/auth"
@@ -59,6 +61,16 @@ type Hub struct {
 
 	logMu  sync.Mutex
 	logBuf []logging.Event // recent log events, replayed to a client on connect
+
+	// dedup suppresses the per-cycle firehose of UNCHANGED slot/status updates:
+	// the scan re-reads and re-emits every slot every cycle, but most cycles
+	// change nothing, so re-broadcasting ~20KB per slot would swamp a browser's
+	// write queue and get it dropped (losing the later frames' updates). We hash
+	// the last bytes sent per key and skip an identical re-send. A (re)connecting
+	// client is unaffected: it gets full state from the reliable frames snapshot.
+	dedupMu    sync.Mutex
+	lastSlot   map[string]uint64 // frameIP|slot -> hash of last slotInfo bytes
+	lastStatus map[string]uint64 // frameIP      -> hash of last frameStatus bytes
 }
 
 // maxLogBuffer bounds the in-memory log history replayed to new clients.
@@ -72,6 +84,8 @@ func New(a *auth.Auth) *Hub {
 		unregister: make(chan *Client),
 		broadcast:  make(chan []byte, 4096),
 		clients:    map[*Client]struct{}{},
+		lastSlot:   map[string]uint64{},
+		lastStatus: map[string]uint64{},
 	}
 	h.router = newRouter(h)
 	return h
@@ -147,30 +161,79 @@ func (h *Hub) emitReliable(command string, data any) {
 
 // emitLossy drops the message if the buffer is full (high-frequency status/log).
 func (h *Hub) emitLossy(command string, data any) {
+	h.emitBytesLossy(encode(command, data))
+}
+
+// emitBytesLossy queues pre-encoded bytes, dropping them if the buffer is full.
+func (h *Hub) emitBytesLossy(b []byte) {
 	select {
-	case h.broadcast <- encode(command, data):
+	case h.broadcast <- b:
 	default:
 	}
 }
 
+// dedupLossy emits a lossy message only when its bytes differ from the last sent
+// for key — collapsing the per-cycle re-broadcast of unchanged data so a busy
+// client is never swamped (and dropped) by redundant updates.
+func (h *Hub) dedupLossy(seen map[string]uint64, key string, payload []byte) {
+	hh := fnv.New64a()
+	hh.Write(payload)
+	sum := hh.Sum64()
+	h.dedupMu.Lock()
+	if seen[key] == sum {
+		h.dedupMu.Unlock()
+		return // identical to what we last sent — skip the redundant broadcast
+	}
+	seen[key] = sum
+	h.dedupMu.Unlock()
+	h.emitBytesLossy(payload)
+}
+
 // --- manager.Broadcaster ---
 
-// BroadcastFrames sends the full frames map to all clients.
-func (h *Hub) BroadcastFrames(f model.Frames) { h.emitReliable(chFrames, f) }
+// BroadcastFrames sends the full frames map to all clients. It also prunes the
+// per-slot/per-status dedup caches of any frame no longer present, so deleting
+// frames can't leak dedup entries over a long uptime.
+func (h *Hub) BroadcastFrames(f model.Frames) {
+	h.pruneDedup(f)
+	h.emitReliable(chFrames, f)
+}
+
+// pruneDedup drops dedup-cache entries for frames absent from f.
+func (h *Hub) pruneDedup(f model.Frames) {
+	h.dedupMu.Lock()
+	defer h.dedupMu.Unlock()
+	for ip := range h.lastStatus {
+		if _, ok := f[ip]; !ok {
+			delete(h.lastStatus, ip)
+		}
+	}
+	for key := range h.lastSlot {
+		ip, _, _ := strings.Cut(key, "|")
+		if _, ok := f[ip]; !ok {
+			delete(h.lastSlot, key)
+		}
+	}
+}
 
 // BroadcastGroups sends the full groups map to all clients.
 func (h *Hub) BroadcastGroups(g model.Groups) { h.emitReliable(chGroups, g) }
 
 // --- scan.Events ---
 
-// FrameStatus reports scan progress.
+// FrameStatus reports scan progress. Deduped per frame so the repeated
+// steady-state "Done"/offline status each cycle isn't re-broadcast.
 func (h *Hub) FrameStatus(frameIP, status string, offline bool) {
-	h.emitLossy(chFrameStatus, map[string]any{"frameIP": frameIP, "status": status, "offline": offline})
+	payload := encode(chFrameStatus, map[string]any{"frameIP": frameIP, "status": status, "offline": offline})
+	h.dedupLossy(h.lastStatus, frameIP, payload)
 }
 
-// SlotInfo sends a per-slot delta.
+// SlotInfo sends a per-slot delta. Deduped per (frame,slot): the scan re-emits
+// every slot every cycle, but only an actual change is broadcast — otherwise a
+// large fleet's unchanged slot data would swamp and disconnect a busy client,
+// dropping the later frames' updates entirely.
 func (h *Hub) SlotInfo(frameIP string, frame *model.Frame, slotName string, slot *model.Slot) {
-	h.emitLossy(chSlotInfo, slotInfoMsg{
+	payload := encode(chSlotInfo, slotInfoMsg{
 		Frame: frameHeader{
 			IP: frame.IP, Number: frame.Number, Name: frame.Name, Group: frame.Group,
 			Enabled: frame.Enabled, Scan: frame.Scan, Offline: frame.Offline,
@@ -178,6 +241,7 @@ func (h *Hub) SlotInfo(frameIP string, frame *model.Frame, slotName string, slot
 		SlotName: slotName,
 		Slot:     model.CloneFrame(&model.Frame{Slots: map[string]*model.Slot{slotName: slot}}).Slots[slotName],
 	})
+	h.dedupLossy(h.lastSlot, frameIP+"|"+slotName, payload)
 }
 
 // FrameError reports a per-frame error (note: field is "error", which app.js reads).

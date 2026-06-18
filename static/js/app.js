@@ -263,6 +263,7 @@ function drawFrames(frames) {
 		}
 	}
 	renderRail();
+	updateApplyAll(); // restore per-frame Apply buttons (start hidden) after a frames-only broadcast
 	// Establish / preserve the selected frame.
 	if (!window.selectedFrame || !frames[window.selectedFrame]) window.selectedFrame = ips[0] || null;
 	if (window.selectedFrame) selectFrame(window.selectedFrame);
@@ -322,15 +323,40 @@ function framePending(ip) {
 	return n;
 }
 
-// isPending: a row will actually be written when it differs from the device
-// (.bg-danger) AND it is managed — an enabled per-card override, or a group that
-// supplies a target value (so a mere difference from a default doesn't count).
+// boolNorm/looseEqual mirror the backend model.ValuesEqualLoose so a row's
+// red/green matches what the scanner will actually write (numeric coercion;
+// booleans normalised to 0/1) — avoiding false reds from '1' vs 1 / True vs 1.
+function boolNorm(x) { return (x === 1 || x === '1' || x === true || x === 'true' || x === 'True') ? 1 : 0; }
+function looseEqual(a, b, type) {
+	if (type === 'boolean') return boolNorm(a) === boolNorm(b);
+	if (a === null || a === undefined) a = '';
+	if (b === null || b === undefined) b = '';
+	const na = Number(a), nb = Number(b);
+	if (a !== '' && b !== '' && na === na && nb === nb) return na === nb; // both numeric (na===na rejects NaN)
+	return String(a) === String(b);
+}
+
+// commandTarget returns the value the scanner will drive this command to,
+// mirroring the backend precedence: an enabled override that carries a value
+// wins; else the group's computed value; else null = NO managed write source (so
+// the row is left neutral, never flagged red merely for differing from a default).
+function commandTarget(prefered, enabled, computed) {
+	if (enabled && prefered != null && prefered.value != null && prefered.value !== '') return prefered.value;
+	if (computed != null && computed !== '') return computed;
+	return null;
+}
+
+// isPending: a row counts as a pending write only when it is red (differs from a
+// real target) AND managed — an override that actually carries a value, or a
+// group target (a bare checked-but-empty override is NOT pending, matching the
+// backend which skips value-less overrides).
 function isPending(_c) {
 	const _read = _c.querySelector('.commandRead');
 	if (!_read || !_read.classList.contains('bg-danger')) return false;
 	const ov = _c.querySelector('.commandEnabled');
 	const grp = _c.querySelector('.commandComputed');
-	return (ov && ov.checked) || (grp && grp.textContent.trim() !== '');
+	const ovHasValue = ov && ov.checked && readTargetFromRow(_c) !== '';
+	return ovHasValue || (grp && grp.textContent.trim() !== '');
 }
 
 // updateApply shows the "Apply changes [N]" button when a frame is in Scan-only
@@ -392,7 +418,7 @@ function recomputeRow(_cont) {
 	else { const i = _cont.querySelector('.commandInput'); target = i ? i.value : ''; }
 	_read.classList.remove('bg-success', 'bg-danger');
 	if (current === null || current === undefined || current === '') return;
-	_read.classList.add(String(target) === String(current) ? 'bg-success' : 'bg-danger');
+	_read.classList.add(looseEqual(current, target, type) ? 'bg-success' : 'bg-danger');
 }
 
 function afterEdit(_element) {
@@ -756,6 +782,13 @@ function markFailures(_slotCont, failed) {
 
 function doFrameStatus(data) {
 	try {
+		// Keep window.frames offline state in sync so the rail status squares and
+		// "N online" summary (which read window.frames[ip].offline) stay live.
+		const f = (window.frames || {})[data.frameIP];
+		if (f && f.offline !== data.offline) {
+			f.offline = data.offline;
+			renderRail();
+		}
 		const _framesCont = document.getElementById('frameDetail');
 		const _frame = _framesCont.querySelector(`[data-ip="${data.frameIP}"]`);
 		const _status = _frame.querySelector('.frameStatus');
@@ -803,9 +836,8 @@ function drawCommand(prefix, command, commandID, editValue = null, readValue = n
 			_cont.insertAdjacentHTML('beforeend', `<div class="form-switch"><input type="checkbox" class="${prefix}_commandEnabled commandEnabled form-check-input"></div>`);
 		}
 		_cont.insertAdjacentHTML('beforeend', `<div class="commandName">${command.name}</div>`);
-		if (readValue) {
+		if (readValue !== null && readValue !== undefined && readValue !== '') {
 			let val = readValue;
-			let match = 'bg-success';
 			switch (command.type) {
 				case 'boolean':
 					val = readValue == 0 ? 'False' : 'True';
@@ -817,24 +849,26 @@ function drawCommand(prefix, command, commandID, editValue = null, readValue = n
 					break;
 			}
 			if (command.shuffle) val = readValue;
+			let match = '';
 			if (readValue == "ERROR") {
-				match = '';
-				val = 'ERROR'
-			} else if (editValue !== null) {
-				match = readValue == editValue.value ? 'bg-success' : 'bg-danger'
+				val = 'ERROR';
 			} else {
-				match = readValue == command.default ? 'bg-success' : 'bg-danger'
+				// Colour against the real write source (override value or group),
+				// never against command.default. (editValue is the override object.)
+				const enabled = editValue !== null && editValue.enabled;
+				const target = commandTarget(editValue, enabled, computed);
+				if (target !== null) match = looseEqual(readValue, target, command.type) ? 'bg-success' : 'bg-danger';
 			}
 			_cont.insertAdjacentHTML('beforeend', `<div class="commandRead form-control form-control-sm w-75 ${match}" data-raw="${readValue}">${val}</div>`);
 		} else {
-			_cont.insertAdjacentHTML('beforeend', `<div class="commandRead"></div>`);
+			_cont.insertAdjacentHTML('beforeend', `<div class="commandRead" data-raw=""></div>`);
 		}
 
 		if (computed) {
 			let val = computed;
 			switch (command.type) {
 				case 'boolean':
-					val = readValue == 0 ? 'False' : 'True';
+					val = computed == 0 ? 'False' : 'True';
 					break;
 				case 'select':
 					val = command.options[computed];
@@ -949,35 +983,12 @@ function updateCommand(_command, command, prefered = null, active, computed = nu
 		if (active == "ERROR") {
 			_read.innerHTML = "ERROR";
 		} else {
-
-			if (enabled) {
-				if (prefered != null) {
-					if (prefered.value == active) {
-						_read.classList.add('bg-success');
-					} else {
-						_read.classList.add('bg-danger');
-					}
-				} else {
-					if (command.default == active) {
-						_read.classList.add('bg-success');
-					} else {
-						_read.classList.add('bg-danger');
-					}
-				}
-			} else {
-				if (computed != null) {
-					if (computed == active) {
-						_read.classList.add('bg-success');
-					} else {
-						_read.classList.add('bg-danger');
-					}
-				} else {
-					if (command.default == active) {
-						_read.classList.add('bg-success');
-					} else {
-						_read.classList.add('bg-danger');
-					}
-				}
+			// Colour only against a REAL write source (override value or group
+			// target), never against command.default, so a row is not flagged
+			// pending for a value the scanner will never write.
+			const target = commandTarget(prefered, enabled, computed);
+			if (target !== null && active !== undefined && active !== null && active !== '') {
+				_read.classList.add(looseEqual(active, target, command.type) ? 'bg-success' : 'bg-danger');
 			}
 		}
 
@@ -1321,6 +1332,7 @@ function doEnable(_element) {
 		"dataType": dataType,
 		"take": take
 	});
+	afterEdit(_element); // enabling/disabling an override flips its pending status now
 }
 
 function doSlotEnable(_element) {
@@ -1332,6 +1344,9 @@ function doSlotEnable(_element) {
 		"slot": slot,
 		"enabled": _element.checked
 	});
+	// A disabled slot is excluded from the pending count — refresh now.
+	renderRail();
+	updateApply(frame);
 }
 
 function doFrameEnable(_element) {
@@ -1354,40 +1369,22 @@ function doFrameScan(_element) {
 
 function doFrameMode(_element) {
 	const frame = _element.closest('.frameCont').getAttribute('data-ip');
+	let scan = false, enabled = false;
 	switch (_element.value) {
-		case "scan":
-			backend.send('scanFrame', {
-				"ip":frame,
-				"scan": true
-			});
-			backend.send('enableFrame', {
-				"ip":frame,
-				"enabled": false
-			});
-			break;
-		case "blast":
-			backend.send('scanFrame', {
-				"ip":frame,
-				"scan": true
-			});
-			backend.send('enableFrame', {
-				"ip":frame,
-				"enabled": true
-			});
-			break;
-		case "ignore":
-			backend.send('scanFrame', {
-				"ip":frame,
-				"scan": false
-			});
-			backend.send('enableFrame', {
-				"ip":frame,
-				"enabled": false
-			});
-			break;
-		default:
-			break;
+		case "scan":  scan = true;  enabled = false; break;
+		case "blast": scan = true;  enabled = true;  break;
+		case "ignore": scan = false; enabled = false; break;
+		default: return;
 	}
+	backend.send('scanFrame', { "ip": frame, "scan": scan });
+	backend.send('enableFrame', { "ip": frame, "enabled": enabled });
+	// Reflect the new mode locally so the Apply button (shown only in Scan-only
+	// mode) and the pending counts update immediately — frame-mode changes aren't
+	// broadcast back, so window.frames would otherwise stay stale until a re-scan.
+	const f = (window.frames || {})[frame];
+	if (f) { f.scan = scan; f.enabled = enabled; }
+	updateApply(frame);
+	renderRail();
 }
 
 

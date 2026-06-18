@@ -140,11 +140,18 @@ func shuffleIndex(active model.Value) int {
 // the immediate verify-and-retry. Takes are momentary triggers and shuffle
 // selects use a 2-step 8500/8501 sequence whose echo semantics aren't confirmed,
 // so both are best-effort (not verified); the background poll loop reconciles.
-func (s *Scanner) doCommands(ctx context.Context, conns Conns, cmds map[string]sendCmd, takes map[uint32]bool, ip, addr, slot string) map[string]string {
+// It returns (applied, failed): `applied` maps each command actually SET this
+// cycle to the device's resulting value (from the echo) so the caller can
+// reconcile the slot's active map immediately; `failed` maps commands that never
+// took to a reason. Takes are momentary (no entry) and shuffles use the 2-step
+// 8500/8501 pair whose echo doesn't map back to the aggregate value, so they get
+// no applied entry (left to the next scan).
+func (s *Scanner) doCommands(ctx context.Context, conns Conns, cmds map[string]sendCmd, takes map[uint32]bool, ip, addr, slot string) (map[string]model.Value, map[string]string) {
+	applied := map[string]model.Value{}
 	failed := map[string]string{}
 	dev, err := conns.Device(ctx, ip)
 	if err != nil {
-		return failed
+		return applied, failed
 	}
 
 	type setOp struct {
@@ -168,15 +175,21 @@ func (s *Scanner) doCommands(ctx context.Context, conns Conns, cmds map[string]s
 
 	if len(sets) > 0 {
 		if err := s.Pool.Acquire(ctx); err != nil {
-			return failed
+			return applied, failed
 		}
 		for _, op := range sets {
 			if ctx.Err() != nil {
 				s.Pool.Release()
-				return failed
+				return applied, failed
 			}
-			if ok, reason := s.setVerified(ctx, dev, addr, slot, op.cmd, op.v); !ok {
+			ok, got, reason := s.setVerified(ctx, dev, addr, slot, op.cmd, op.v)
+			if ok {
+				applied[op.command] = got
+			} else {
 				failed[op.command] = reason
+				if !got.IsNone() { // rejected SET: record the device-actual value (stays pending)
+					applied[op.command] = got
+				}
 			}
 		}
 		for take := range takes {
@@ -190,47 +203,54 @@ func (s *Scanner) doCommands(ctx context.Context, conns Conns, cmds map[string]s
 
 	for command, val := range shuffles {
 		if ctx.Err() != nil {
-			return failed
+			return applied, failed
 		}
 		spigot := (mustAtoi(command) - 50265) / 300
 		if err := s.Pool.Acquire(ctx); err != nil {
-			return failed
+			return applied, failed
 		}
 		_, _ = dev.Set(ctx, addr, slot, 8500, model.IntVal(int64(spigot)))
 		_, _ = dev.Set(ctx, addr, slot, 8501, val)
 		s.Pool.Release()
 	}
-	return failed
+	return applied, failed
 }
 
 // setVerified sends a SET and confirms the device's echoed value matches what we
-// sent, retrying up to VerifyAttempts. Returns (true,"") once applied, or
-// (false, reason) if it never took. This is the immediate, within-cycle retry
-// that complements the slower background poll-loop reconciliation.
-func (s *Scanner) setVerified(ctx context.Context, dev device.Device, addr, slot string, cmd uint32, v model.Value) (bool, string) {
+// sent, retrying up to VerifyAttempts. It returns (ok, applied, reason): `applied`
+// is the device's actual current value (its echo) to write back into the slot's
+// active map so the UI reflects reality immediately — on success it's the new
+// value (row clears), on a rejected SET it's the unchanged device value (row
+// correctly stays pending), and on a transport error it's None (caller must not
+// touch active). This is the immediate, within-cycle retry that complements the
+// slower background poll-loop reconciliation.
+func (s *Scanner) setVerified(ctx context.Context, dev device.Device, addr, slot string, cmd uint32, v model.Value) (bool, model.Value, string) {
 	attempts := s.verifyAttempts()
 	var got model.Value
 	var err error
 	for attempt := 1; attempt <= attempts; attempt++ {
 		if ctx.Err() != nil {
-			return false, "scan cancelled"
+			return false, model.None(), "scan cancelled"
 		}
 		got, err = dev.Set(ctx, addr, slot, cmd, v)
 		if err == nil && model.ValuesEqualLoose(v, got) {
-			return true, ""
+			return true, got, "" // applied: active becomes the device's confirmed value
 		}
 		if attempt < attempts {
 			select {
 			case <-time.After(s.verifyDelay()):
 			case <-ctx.Done():
-				return false, "scan cancelled"
+				return false, model.None(), "scan cancelled"
 			}
 		}
 	}
 	if err != nil {
-		return false, fmt.Sprintf("device error after %d attempts: %v", attempts, err)
+		// No trustworthy device value — leave active as the pre-blast read.
+		return false, model.None(), fmt.Sprintf("device error after %d attempts: %v", attempts, err)
 	}
-	return false, fmt.Sprintf("not applied after %d attempts (sent %s, device reports %s)", attempts, v.String(), got.String())
+	// Rejected: `got` is the device's actual value (still != target), so active
+	// becomes reality and the row correctly stays pending.
+	return false, got, fmt.Sprintf("not applied after %d attempts (sent %s, device reports %s)", attempts, v.String(), got.String())
 }
 
 // coerceDefault mirrors main.ts's `isNaN(parseFloat(value)) ? "value" : value`:
