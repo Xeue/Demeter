@@ -16,6 +16,7 @@ type noopEvents struct{}
 
 func (noopEvents) FrameStatus(string, string, bool)                   {}
 func (noopEvents) SlotInfo(string, *model.Frame, string, *model.Slot) {}
+func (noopEvents) SlotInfoBatch(string, *model.Frame, []string)       {}
 func (noopEvents) FrameError(string, string)                          {}
 
 type testConns struct {

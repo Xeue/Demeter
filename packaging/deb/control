@@ -1,0 +1,12 @@
+Package: demeter
+Version: __VERSION__
+Architecture: __ARCH__
+Maintainer: Sam Chilton <sam@chilton.tv>
+Section: net
+Priority: optional
+Depends: adduser
+Description: Bulk programmer for GV UCP/IQ broadcast cards
+ Demeter is a headless server that speaks the RollCall protocol natively (no
+ RollTrak.exe) and hosts a web GUI for bulk-configuring Grass Valley UCP/IQ
+ cards across many frames. It installs as a systemd service ('demeter')
+ listening on port 8080, storing its data under /var/lib/demeter.

@@ -26,6 +26,7 @@ type noopScanEvents struct{}
 
 func (noopScanEvents) FrameStatus(string, string, bool)                   {}
 func (noopScanEvents) SlotInfo(string, *model.Frame, string, *model.Slot) {}
+func (noopScanEvents) SlotInfoBatch(string, *model.Frame, []string)       {}
 func (noopScanEvents) FrameError(string, string)                          {}
 
 func testManager(t *testing.T, frames model.Frames, groups model.Groups) (*Manager, context.CancelFunc) {

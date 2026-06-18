@@ -19,16 +19,17 @@ type Envelope struct {
 
 // Outbound channel names.
 const (
-	chFrames      = "frames"
-	chGroups      = "groups"
-	chSlotInfo    = "slotInfo"
-	chFrameStatus = "frameStatus"
-	chFrameError  = "frameError"
-	chLog         = "log"  // a single live log event
-	chLogs        = "logs" // a batch of recent log events (history replay on connect)
-	chUsers       = "users"
-	chCredentials = "credentials"
-	chExport      = "exportData"
+	chFrames        = "frames"
+	chGroups        = "groups"
+	chSlotInfo      = "slotInfo"
+	chSlotInfoBatch = "slotInfoBatch"
+	chFrameStatus   = "frameStatus"
+	chFrameError    = "frameError"
+	chLog           = "log"  // a single live log event
+	chLogs          = "logs" // a batch of recent log events (history replay on connect)
+	chUsers         = "users"
+	chCredentials   = "credentials"
+	chExport        = "exportData"
 )
 
 // frameHeader is the trimmed frame sent with a per-slot slotInfo (enough for the
@@ -51,8 +52,30 @@ type slotInfoMsg struct {
 	Slot     *model.Slot `json:"slot"`
 }
 
+// slotInfoItem is one slot inside a coalesced batch.
+type slotInfoItem struct {
+	SlotName string      `json:"slotName"`
+	Slot     *model.Slot `json:"slot"`
+}
+
+// slotInfoBatchMsg coalesces all of one frame's changed slots into a single
+// message (emitted when the frame finishes a scan), so a fleet-wide burst is one
+// message per frame instead of one per slot — the client re-expands the items
+// into its normal per-slot render queue.
+type slotInfoBatchMsg struct {
+	Frame frameHeader    `json:"frame"`
+	Slots []slotInfoItem `json:"slots"`
+}
+
 func encode(command string, data any) []byte {
 	d, _ := json.Marshal(data)
 	b, _ := json.Marshal(Envelope{Command: command, Data: d})
+	return b
+}
+
+// marshalData returns the JSON of a payload's data only (used as the dedup hash
+// basis so a slot's content — not the envelope — decides whether it changed).
+func marshalData(v any) []byte {
+	b, _ := json.Marshal(v)
 	return b
 }

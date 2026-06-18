@@ -4,10 +4,12 @@ let frames;
 let groups;
 
 document.addEventListener('DOMContentLoaded', () => {
+	if (window.__demeterPortNotice) showPortNotice(window.__demeterPortNotice);
 	backend.on('frames', drawFrames);
 	backend.on('log', doLog);
 	backend.on('logs', logs => { if (Array.isArray(logs)) logs.forEach(doLog); });
 	backend.on('slotInfo', drawSlotInfo);
+	backend.on('slotInfoBatch', drawSlotInfoBatch);
 	backend.on('frameStatus', doFrameStatus);
 	backend.on('groups', drawGroups);
 	backend.on('frameError', doFrameError);
@@ -540,6 +542,19 @@ function drawSlotInfo(slotInfo) {
 	if (window.pause) return;
 	if (!slotInfo || !slotInfo.frame) return;
 	_slotQueue.set(slotInfo.frame.ip + '|' + slotInfo.slotName, slotInfo);
+	if (_slotRAF === null) _slotRAF = requestAnimationFrame(flushSlotInfo);
+}
+
+// drawSlotInfoBatch receives a whole frame's slots in one message (server-side
+// coalescing) and fans them into the same per-slot queue, so the rest of the
+// render path (the single requestAnimationFrame flush, the _slotRenderCache
+// skip, renderRail) is unchanged — one message, one render flush, no extra churn.
+function drawSlotInfoBatch(batch) {
+	if (window.pause) return;
+	if (!batch || !batch.frame || !Array.isArray(batch.slots)) return;
+	for (const item of batch.slots) {
+		_slotQueue.set(batch.frame.ip + '|' + item.slotName, { frame: batch.frame, slotName: item.slotName, slot: item.slot });
+	}
 	if (_slotRAF === null) _slotRAF = requestAnimationFrame(flushSlotInfo);
 }
 
@@ -1177,6 +1192,25 @@ function colourToClass(c) {
 
 function escapeHTML(s) {
 	return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// showPortNotice (desktop only) tells the operator that the default port was in
+// use so Demeter bound an alternate one — the window itself works, but the URL
+// for browser access changed. window.__demeterPortNotice is injected by the
+// desktop launcher (webview Init) only when the bound port differs from default.
+function showPortNotice(n) {
+	if (!n || !n.actual || document.getElementById('portNotice')) return;
+	const host = location.hostname || 'localhost';
+	const _b = document.createElement('div');
+	_b.id = 'portNotice';
+	_b.className = 'portNotice';
+	_b.innerHTML =
+		`<span>⚠ Port <strong>${escapeHTML(n.requested)}</strong> was already in use, so Demeter is running on ` +
+		`<strong>port ${escapeHTML(n.actual)}</strong>. To open it in a browser, use ` +
+		`<code>http://${escapeHTML(host)}:${escapeHTML(n.actual)}</code>.</span>` +
+		`<button class="btn btn-sm btn-light ms-3">Dismiss</button>`;
+	_b.querySelector('button').onclick = () => _b.remove();
+	document.body.appendChild(_b);
 }
 
 function getClass(num) {

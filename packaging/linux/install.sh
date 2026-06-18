@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+# Demeter installer — installs the headless server as a systemd service.
+#
+# Usage (on a Debian-based box, over SSH):
+#   sudo ./install.sh                     install or upgrade (auto-detects the
+#                                         demeter binary sitting next to this script)
+#   sudo ./install.sh --port 9000         listen on a different port
+#   sudo ./install.sh --binary ./demeter  use a specific binary
+#   sudo ./install.sh uninstall           stop + remove the service and binary (keeps data)
+#   sudo ./install.sh uninstall --purge   also delete the data dir and service user
+#
+# It creates a 'demeter' system user, installs the binary to /usr/local/bin,
+# writes a hardened systemd unit, stores data in /var/lib/demeter, and (on a
+# first install) creates an admin login and prints the URL + credentials.
+set -euo pipefail
+
+SERVICE=demeter
+BIN_DEST=/usr/local/bin/demeter
+UNIT=/etc/systemd/system/${SERVICE}.service
+DATA_DIR=/var/lib/demeter
+RUN_USER=demeter
+PORT=8080
+BINARY=""
+ACTION=install
+PURGE=0
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		install|uninstall) ACTION="$1" ;;
+		--port) PORT="${2:?--port needs a value}"; shift ;;
+		--binary) BINARY="${2:?--binary needs a path}"; shift ;;
+		--purge) PURGE=1 ;;
+		-h|--help) awk 'NR==1{next} /^#/{sub(/^# ?/,"");print;next} {exit}' "$0"; exit 0 ;;
+		*) echo "unknown argument: $1 (try --help)" >&2; exit 2 ;;
+	esac
+	shift
+done
+
+die() { echo "error: $*" >&2; exit 1; }
+need_root() { [ "$(id -u)" = 0 ] || die "run as root, e.g. sudo $0 ${ACTION}"; }
+need_systemd() { command -v systemctl >/dev/null 2>&1 || die "systemctl not found — this installer targets systemd distros (Debian/Ubuntu)"; }
+
+# run a command as the unprivileged service user
+run_as() {
+	if command -v runuser >/dev/null 2>&1; then
+		runuser -u "$RUN_USER" -- "$@"
+	else
+		su -s /bin/sh "$RUN_USER" -c "$(printf '%q ' "$@")"
+	fi
+}
+
+find_binary() {
+	if [ -n "$BINARY" ]; then
+		[ -f "$BINARY" ] || die "binary not found: $BINARY"
+		echo "$BINARY"; return
+	fi
+	local c
+	for c in "$SCRIPT_DIR"/demeter "$SCRIPT_DIR"/Demeter-v*-linux-* "$SCRIPT_DIR"/demeter-v*-linux-* "$SCRIPT_DIR"/demeter-linux-*; do
+		[ -f "$c" ] && { echo "$c"; return; }
+	done
+	command -v demeter >/dev/null 2>&1 && { command -v demeter; return; }
+	die "no demeter binary found — put it next to this script or pass --binary PATH"
+}
+
+write_unit() {
+	cat > "$UNIT" <<UNIT
+[Unit]
+Description=Demeter — bulk programmer for GV UCP/IQ broadcast cards
+Documentation=https://github.com/Xeue/Demeter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${RUN_USER}
+Group=${RUN_USER}
+ExecStart=${BIN_DEST} --data-dir ${DATA_DIR} --listen :${PORT}
+Restart=on-failure
+RestartSec=5
+StateDirectory=${SERVICE}
+StateDirectoryMode=0750
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+}
+
+create_user() {
+	id "$RUN_USER" >/dev/null 2>&1 && return
+	if command -v useradd >/dev/null 2>&1; then
+		useradd --system --no-create-home --shell /usr/sbin/nologin "$RUN_USER"
+	else
+		adduser --system --no-create-home --group "$RUN_USER" >/dev/null
+	fi
+}
+
+do_install() {
+	need_root; need_systemd
+	local src; src="$(find_binary)"
+	echo "==> installing $(basename "$src") -> $BIN_DEST  (port :${PORT})"
+
+	create_user
+
+	# Detect a first install BEFORE we create the data dir, so upgrades keep data.
+	local first=0
+	if [ ! -d "$DATA_DIR" ] || [ -z "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then first=1; fi
+
+	install -d -o "$RUN_USER" -g "$RUN_USER" -m 0750 "$DATA_DIR"
+	install -m 0755 "$src" "$BIN_DEST"
+	write_unit
+	systemctl daemon-reload
+
+	local admin_user="admin" admin_pass=""
+	if [ "$first" = 1 ]; then
+		if [ -t 0 ]; then
+			read -r -p "Admin username [admin]: " admin_in || true
+			admin_user="${admin_in:-admin}"
+			read -r -s -p "Admin password (blank = auto-generate): " admin_pass || true; echo
+		fi
+		if [ -z "$admin_pass" ]; then
+			admin_pass="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)"
+			echo "==> generated an admin password"
+		fi
+		run_as "$BIN_DEST" --create-admin "${admin_user}:${admin_pass}" --data-dir "$DATA_DIR"
+	fi
+
+	# enable, then restart (not just start) so an upgrade picks up the new binary.
+	systemctl enable "$SERVICE"
+	systemctl restart "$SERVICE"
+
+	local ip; ip="$(hostname -I 2>/dev/null | awk '{print $1}')"; [ -n "$ip" ] || ip="<server-ip>"
+	echo
+	echo "================= Demeter installed ================="
+	echo "  URL:     http://${ip}:${PORT}"
+	if [ "$first" = 1 ]; then
+		echo "  Login:   ${admin_user} / ${admin_pass}"
+	else
+		echo "  (existing data kept; login unchanged)"
+	fi
+	echo "  Status:  systemctl status ${SERVICE}"
+	echo "  Logs:    journalctl -u ${SERVICE} -f"
+	echo "  Stop:    sudo systemctl stop ${SERVICE}"
+	echo "===================================================="
+}
+
+do_uninstall() {
+	need_root; need_systemd
+	systemctl disable --now "$SERVICE" 2>/dev/null || true
+	rm -f "$UNIT"
+	systemctl daemon-reload
+	rm -f "$BIN_DEST"
+	echo "==> removed the service and binary"
+	if [ "$PURGE" = 1 ]; then
+		rm -rf "$DATA_DIR"
+		if command -v userdel >/dev/null 2>&1; then userdel "$RUN_USER" 2>/dev/null || true
+		else deluser --system "$RUN_USER" 2>/dev/null || true; fi
+		echo "==> purged data ($DATA_DIR) and user ($RUN_USER)"
+	else
+		echo "==> kept your data in $DATA_DIR (re-run with --purge to delete it)"
+	fi
+}
+
+case "$ACTION" in
+	install) do_install ;;
+	uninstall) do_uninstall ;;
+esac

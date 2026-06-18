@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -81,5 +82,53 @@ func TestFrameStatusDedup(t *testing.T) {
 	h.FrameStatus("10.0.0.7", "Cannot reach frame", true) // offline flip -> sent
 	if got := len(h.broadcast); got != 2 {
 		t.Errorf("offline-flag change should broadcast; queued=%d (want 2)", got)
+	}
+}
+
+// TestSlotInfoBatchCoalesces: a frame's slots are emitted as ONE batch message,
+// per-slot deduped, with an unchanged batch suppressed entirely — this is the
+// per-frame coalescing that collapses a fleet-discovery burst from N messages to
+// one per frame so a busy client's send queue can't overflow.
+func TestSlotInfoBatchCoalesces(t *testing.T) {
+	h := New(nil)
+	frame := &model.Frame{IP: "10.0.0.1", Number: "1", Slots: map[string]*model.Slot{}}
+	for _, n := range []string{"01", "02", "03"} {
+		sl := model.NewSlot()
+		sl.Ins, sl.Outs = 8, 8
+		frame.Slots[n] = sl
+	}
+	names := []string{"01", "02", "03"}
+
+	// First discovery: all 3 slots change -> ONE message carrying 3 items.
+	h.SlotInfoBatch("10.0.0.1", frame, names)
+	if got := len(h.broadcast); got != 1 {
+		t.Fatalf("expected 1 coalesced batch, got %d messages", got)
+	}
+	var env Envelope
+	if err := json.Unmarshal(<-h.broadcast, &env); err != nil || env.Command != chSlotInfoBatch {
+		t.Fatalf("command=%q (err %v), want %q", env.Command, err, chSlotInfoBatch)
+	}
+	var batch slotInfoBatchMsg
+	_ = json.Unmarshal(env.Data, &batch)
+	if len(batch.Slots) != 3 {
+		t.Errorf("batch carried %d slots, want 3", len(batch.Slots))
+	}
+
+	// Re-scan with nothing changed -> no message at all.
+	h.SlotInfoBatch("10.0.0.1", frame, names)
+	if got := len(h.broadcast); got != 0 {
+		t.Errorf("unchanged batch should emit nothing, got %d", got)
+	}
+
+	// One slot changes -> a batch with ONLY that slot (per-item dedup).
+	frame.Slots["02"].Ins = 4
+	h.SlotInfoBatch("10.0.0.1", frame, names)
+	if got := len(h.broadcast); got != 1 {
+		t.Fatalf("expected 1 message after one slot changed, got %d", got)
+	}
+	_ = json.Unmarshal(<-h.broadcast, &env)
+	_ = json.Unmarshal(env.Data, &batch)
+	if len(batch.Slots) != 1 || batch.Slots[0].SlotName != "02" {
+		t.Errorf("delta batch should carry only slot 02, got %+v", batch.Slots)
 	}
 }

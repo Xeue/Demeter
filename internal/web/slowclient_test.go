@@ -117,6 +117,16 @@ func TestRepro_SlowClientLosesLaterFrames(t *testing.T) {
 			if json.Unmarshal(env.Data, &m) == nil {
 				slotSeen[m.Frame.IP] = true
 			}
+		case "slotInfoBatch":
+			var m struct {
+				Frame struct {
+					IP string `json:"ip"`
+				} `json:"frame"`
+				Slots []json.RawMessage `json:"slots"`
+			}
+			if json.Unmarshal(env.Data, &m) == nil && len(m.Slots) > 0 {
+				slotSeen[m.Frame.IP] = true
+			}
 		case "frameStatus":
 			var m struct {
 				FrameIP string `json:"frameIP"`

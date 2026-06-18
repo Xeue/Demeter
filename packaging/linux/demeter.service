@@ -1,0 +1,33 @@
+[Unit]
+Description=Demeter — bulk programmer for GV UCP/IQ broadcast cards
+Documentation=https://github.com/Xeue/Demeter
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=demeter
+Group=demeter
+# __BINPATH__ and __LISTEN__ are substituted at install time (install.sh / make deb).
+ExecStart=__BINPATH__ --data-dir /var/lib/demeter --listen __LISTEN__
+Restart=on-failure
+RestartSec=5
+
+# systemd creates/owns /var/lib/demeter for the service user (and keeps it
+# writable under the sandbox below).
+StateDirectory=demeter
+StateDirectoryMode=0750
+
+# Hardening (safe for a pure-Go HTTP service that only writes its data dir).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

@@ -164,12 +164,22 @@ func (a *App) startBackground(ctx context.Context) {
 	}
 }
 
-// Run starts the background goroutines and serves on the configured address
-// until ctx is cancelled.
+// Run binds the web server — probing for a free port from the configured one if
+// it is already in use — then starts the background goroutines and serves until
+// ctx is cancelled.
 func (a *App) Run(ctx context.Context) error {
+	requested := a.Cfg.ListenAddr
+	ln, err := web.Listen(requested)
+	if err != nil {
+		return err
+	}
+	a.Cfg.ListenAddr = ln.Addr().String()
 	a.startBackground(ctx)
-	slog.Info("Demeter started", "version", version(), "listen", a.Cfg.ListenAddr, "data", a.Cfg.DataDir)
-	return a.Srv.ListenAndServe(ctx)
+	if reqP, actP := web.PortOf(requested), web.PortOf(ln.Addr().String()); reqP != "" && reqP != "0" && reqP != actP {
+		slog.Warn("requested port in use — bound an alternate port", "requested", reqP, "actual", actP)
+	}
+	slog.Info("Demeter started", "version", version(), "listen", ln.Addr().String(), "data", a.Cfg.DataDir)
+	return a.Srv.Serve(ctx, ln)
 }
 
 // RunListener is like Run but serves on a caller-supplied listener (used by the

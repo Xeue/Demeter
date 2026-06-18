@@ -21,6 +21,7 @@ func (c *countingEvents) FrameStatus(_, status string, _ bool) {
 	}
 }
 func (c *countingEvents) SlotInfo(string, *model.Frame, string, *model.Slot) {}
+func (c *countingEvents) SlotInfoBatch(string, *model.Frame, []string)       {}
 func (c *countingEvents) FrameError(string, string)                          {}
 
 // TestActorPollNowRetriesAfterInflight: an operator "try again" (PollNow) issued

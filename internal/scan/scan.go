@@ -31,6 +31,10 @@ import (
 type Events interface {
 	FrameStatus(frameIP, status string, offline bool)
 	SlotInfo(frameIP string, frame *model.Frame, slotName string, slot *model.Slot)
+	// SlotInfoBatch delivers all of a frame's just-scanned slots in one shot when
+	// the frame finishes a scan, so the transport coalesces a fleet-discovery
+	// burst to one message per frame instead of one per slot.
+	SlotInfoBatch(frameIP string, frame *model.Frame, slotNames []string)
 	FrameError(frameIP, errMsg string)
 }
 
@@ -177,6 +181,11 @@ func (s *Scanner) CheckFrame(ctx context.Context, frame *model.Frame, groups mod
 
 	frame.Done = true
 	if ctx.Err() == nil {
+		// Coalesce: emit all of this frame's just-scanned slots as ONE batch
+		// instead of one message per slot. The hub dedups each slot, so unchanged
+		// slots cost nothing; a fleet-discovery burst collapses to one message per
+		// frame, keeping a busy client's send queue from overflowing.
+		s.Events.SlotInfoBatch(frameIP, frame, foundSlots)
 		s.Events.FrameStatus(frameIP, "Done", frame.Offline)
 	}
 }
@@ -316,7 +325,7 @@ func (s *Scanner) scanSlot(ctx context.Context, frame *model.Frame, slot, addres
 		sl.RebootNeeded = false
 		sl.RebootReasons = nil
 		sl.Failed = nil
-		s.Events.SlotInfo(frameIP, frame, slot, sl)
+		// (slot delta is emitted as part of the per-frame batch in CheckFrame)
 		s.Events.FrameStatus(frameIP, fmt.Sprintf("Slot: %s not enabled", slot), frame.Offline)
 		return
 	}
@@ -377,7 +386,7 @@ func (s *Scanner) scanSlot(ctx context.Context, frame *model.Frame, slot, addres
 	for cmd, v := range applied {
 		sl.Active[cmd] = v
 	}
-	s.Events.SlotInfo(frameIP, frame, slot, sl)
+	// (slot delta is emitted as part of the per-frame batch in CheckFrame)
 }
 
 // checkCard ports main.ts:869-928 (talks to the card's own IP at addr 30/slot 00).

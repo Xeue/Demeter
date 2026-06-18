@@ -53,30 +53,49 @@ webview (WebView2 on Windows, WebKit on macOS/Linux). It's the same Go binary
 family — no Rust/Tauri toolchain — and auto-logs-in over loopback so there's no
 login prompt.
 
-- Build (needs CGO + the system webview headers): `make desktop` — outputs `Demeter-v<version>` (`.exe` on a Windows host).
+- Build (needs CGO + the system webview headers): `make desktop`.
 - Windows needs the WebView2 runtime (preinstalled on Win11; Evergreen installer on Win10).
 - The plain `go build ./cmd/demeter` server build stays pure-Go static and is unaffected.
 - If `go mod tidy` drops the webview dep, re-add it: `go get github.com/webview/webview_go`.
 
-Desktop artifacts are named `Demeter-v<version>` with a platform-appropriate
-extension (the version comes from the `VERSION` file):
+### Release artifact naming
+Every target builds into `dist/v<version>/`, and all artifacts follow one
+scheme — `Demeter-v<version>-<platform>[.ext]` (version from the `VERSION`
+file). Desktop builds carry a `desktop-` token so they never collide with the
+headless server on the same OS:
 
-| Target | Output |
+| Target | Output (under `dist/v<version>/`) |
 |---|---|
-| `make desktop` | `Demeter-v2.0.0` (host OS; `.exe` on Windows) |
-| `make desktop-windows` | `Demeter-v2.0.0.exe` |
-| `make desktop-macapp` | `Demeter-v2.0.0.app` |
+| `make server-linux` | `Demeter-v<version>-linux-amd64` |
+| `make server-linux-arm64` | `Demeter-v<version>-linux-arm64` |
+| `make server-windows` | `Demeter-v<version>-windows-amd64.exe` |
+| `make deb` (`DEB_ARCH=arm64` for ARM) | `Demeter-v<version>-linux-amd64.deb` |
+| `make dist-linux` | `Demeter-v<version>-linux-amd64.tar.gz` |
+| `make desktop` | `Demeter-v<version>-desktop-<os>-<arch>` (`.exe` on Windows) |
+| `make desktop-windows` | `Demeter-v<version>-desktop-windows-amd64.exe` |
+| `make desktop-macapp` | `Demeter-v<version>-desktop-macos.app` |
 
-**Launching without a terminal window:**
-- **Windows:** `make desktop-windows` builds `Demeter-v<version>.exe` with
-  `-ldflags="-H windowsgui"`, so it opens only the webview window (no console).
-  Logs still go to the log file.
-- **macOS:** `make desktop-macapp` produces `Demeter-v<version>.app` — double-click
-  it (or `open Demeter-v<version>.app`) and Finder launches it with no Terminal.
-  See `packaging/macos/Info.plist`.
+The plain `make server`/`make probe` also write into `dist/v<version>/` (as
+`demeter`/`rcprobe`) for local dev/run. `dist/` is git-ignored; `make clean`
+removes it.
 
-See the [Makefile](Makefile) for all build targets (`server`, `desktop`,
-`server-windows`, `desktop-windows`, `desktop-macapp`, `server-linux`).
+**Launching the desktop app without a terminal window:**
+- **Windows:** `make desktop-windows` builds with `-ldflags="-H windowsgui"`, so
+  it opens only the webview window (no console). Logs still go to the log file.
+- **macOS:** `make desktop-macapp` produces a `.app` bundle — double-click it
+  (or `open Demeter-v<version>-desktop-macos.app`) and Finder launches it with no
+  Terminal. See `packaging/macos/Info.plist`.
+
+### Install on Linux as a service
+For a non-technical operator with SSH access, build under `dist/v<version>/`, then either:
+- **`.deb`:** `make deb`, copy the `.deb` over, then `sudo apt install ./Demeter-v<version>-linux-amd64.deb`.
+- **Script:** `make dist-linux`, copy + untar the `.tar.gz`, then `sudo ./Demeter-v<version>-linux-amd64/install.sh`.
+
+Both create a `demeter` system user + hardened systemd service, store data in
+`/var/lib/demeter`, and print the URL + a generated admin login. See
+[packaging/linux/install.sh](packaging/linux/install.sh) and [packaging/deb/](packaging/deb/).
+
+Run `make` (or `make list`) for the full target list.
 
 Architecture: `cmd/demeter` wires `internal/{config,store,auth,logging,hub,
 manager,frame,scan,device,pool,expr,model,commandsdb}`; `rollcall/` is the

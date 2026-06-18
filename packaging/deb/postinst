@@ -1,0 +1,44 @@
+#!/bin/sh
+# Demeter .deb post-install: create the service user, seed an admin on first
+# install, then enable + (re)start the systemd service.
+set -e
+
+SERVICE=demeter
+RUN_USER=demeter
+DATA_DIR=/var/lib/demeter
+BIN=/usr/bin/demeter
+
+case "$1" in
+	configure)
+		# Dedicated system user.
+		if ! getent passwd "$RUN_USER" >/dev/null; then
+			adduser --system --group --no-create-home --home "$DATA_DIR" \
+				--shell /usr/sbin/nologin "$RUN_USER" >/dev/null
+		fi
+		mkdir -p "$DATA_DIR"
+		chown "$RUN_USER:$RUN_USER" "$DATA_DIR"
+		chmod 0750 "$DATA_DIR"
+
+		# First install (empty data dir): create an admin login and surface it.
+		if [ -z "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then
+			PASS="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)"
+			if runuser -u "$RUN_USER" -- "$BIN" --create-admin "admin:${PASS}" --data-dir "$DATA_DIR" >/dev/null 2>&1; then
+				CRED="$DATA_DIR/INITIAL_ADMIN_PASSWORD"
+				{ echo "username: admin"; echo "password: $PASS"; } > "$CRED" 2>/dev/null || true
+				chown "$RUN_USER:$RUN_USER" "$CRED" 2>/dev/null || true
+				chmod 0600 "$CRED" 2>/dev/null || true
+				echo "Demeter: created admin login  ->  admin / $PASS"
+				echo "Demeter: (also saved to $CRED)"
+			fi
+		fi
+
+		systemctl daemon-reload >/dev/null 2>&1 || true
+		systemctl enable "$SERVICE" >/dev/null 2>&1 || true
+		systemctl restart "$SERVICE" >/dev/null 2>&1 || true
+
+		IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+		echo "Demeter: running at http://${IP:-<server-ip>}:8080  (systemctl status $SERVICE)"
+		;;
+esac
+
+exit 0

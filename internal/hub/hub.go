@@ -3,6 +3,7 @@ package hub
 import (
 	"hash/fnv"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 
@@ -42,7 +43,12 @@ type Engine interface {
 	ImportData(frames model.Frames, groups model.Groups)
 }
 
-const clientSendBuffer = 256
+// clientSendBuffer is the per-client outbound queue depth (messages). It must
+// comfortably exceed the largest realistic burst (a full-fleet discovery), so a
+// momentarily-busy browser isn't dropped by fan() before its writePump drains.
+// Per-frame coalescing (SlotInfoBatch) keeps a burst to ~one message per frame,
+// so this headroom covers a large fleet many times over.
+const clientSendBuffer = 1024
 
 // Hub fans outbound messages to all connected clients and dispatches inbound
 // messages to the engine. It implements scan.Events, manager.Broadcaster and a
@@ -172,21 +178,28 @@ func (h *Hub) emitBytesLossy(b []byte) {
 	}
 }
 
-// dedupLossy emits a lossy message only when its bytes differ from the last sent
-// for key — collapsing the per-cycle re-broadcast of unchanged data so a busy
-// client is never swamped (and dropped) by redundant updates.
-func (h *Hub) dedupLossy(seen map[string]uint64, key string, payload []byte) {
+// changedSince reports whether the hashContent for key differs from the last
+// seen value, updating it. This is the dedup primitive that collapses the
+// per-cycle re-broadcast of unchanged data so a busy client is never swamped
+// (and dropped) by redundant updates.
+func (h *Hub) changedSince(seen map[string]uint64, key string, hashContent []byte) bool {
 	hh := fnv.New64a()
-	hh.Write(payload)
+	hh.Write(hashContent)
 	sum := hh.Sum64()
 	h.dedupMu.Lock()
+	defer h.dedupMu.Unlock()
 	if seen[key] == sum {
-		h.dedupMu.Unlock()
-		return // identical to what we last sent — skip the redundant broadcast
+		return false // identical to what we last sent — skip
 	}
 	seen[key] = sum
-	h.dedupMu.Unlock()
-	h.emitBytesLossy(payload)
+	return true
+}
+
+// dedupLossy emits payload only when its bytes differ from the last sent for key.
+func (h *Hub) dedupLossy(seen map[string]uint64, key string, payload []byte) {
+	if h.changedSince(seen, key, payload) {
+		h.emitBytesLossy(payload)
+	}
 }
 
 // --- manager.Broadcaster ---
@@ -228,20 +241,57 @@ func (h *Hub) FrameStatus(frameIP, status string, offline bool) {
 	h.dedupLossy(h.lastStatus, frameIP, payload)
 }
 
-// SlotInfo sends a per-slot delta. Deduped per (frame,slot): the scan re-emits
-// every slot every cycle, but only an actual change is broadcast — otherwise a
-// large fleet's unchanged slot data would swamp and disconnect a busy client,
-// dropping the later frames' updates entirely.
+// SlotInfo sends a single per-slot delta, deduped per (frame,slot). Live scans
+// use SlotInfoBatch instead; this remains for any one-off per-slot push.
 func (h *Hub) SlotInfo(frameIP string, frame *model.Frame, slotName string, slot *model.Slot) {
-	payload := encode(chSlotInfo, slotInfoMsg{
-		Frame: frameHeader{
-			IP: frame.IP, Number: frame.Number, Name: frame.Name, Group: frame.Group,
-			Enabled: frame.Enabled, Scan: frame.Scan, Offline: frame.Offline,
-		},
+	msg := slotInfoMsgFor(frame, slotName, slot)
+	if h.changedSince(h.lastSlot, frameIP+"|"+slotName, marshalData(msg)) {
+		h.emitBytesLossy(encode(chSlotInfo, msg))
+	}
+}
+
+// SlotInfoBatch coalesces all of a frame's just-scanned slots into ONE message,
+// emitted when the frame finishes scanning. Each slot is deduped individually
+// (unchanged slots add nothing), so a discovery/rescan burst that used to be N
+// per-slot messages becomes one message per frame — keeping a busy client's
+// send queue well under its cap instead of overflowing and getting dropped. The
+// client fans the items back through its normal per-slot render queue.
+func (h *Hub) SlotInfoBatch(frameIP string, frame *model.Frame, slotNames []string) {
+	items := make([]slotInfoItem, 0, len(slotNames))
+	for _, name := range slotNames {
+		slot := frame.Slots[name]
+		if slot == nil {
+			continue
+		}
+		msg := slotInfoMsgFor(frame, name, slot)
+		if !h.changedSince(h.lastSlot, frameIP+"|"+name, marshalData(msg)) {
+			continue // unchanged since last sent
+		}
+		items = append(items, slotInfoItem{SlotName: name, Slot: msg.Slot})
+	}
+	if len(items) == 0 {
+		return
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].SlotName < items[j].SlotName })
+	h.emitBytesLossy(encode(chSlotInfoBatch, slotInfoBatchMsg{Frame: frameHeaderOf(frame), Slots: items}))
+}
+
+// frameHeaderOf builds the trimmed identity header sent with slot deltas.
+func frameHeaderOf(f *model.Frame) frameHeader {
+	return frameHeader{
+		IP: f.IP, Number: f.Number, Name: f.Name, Group: f.Group,
+		Enabled: f.Enabled, Scan: f.Scan, Offline: f.Offline,
+	}
+}
+
+// slotInfoMsgFor builds a per-slot delta with a deep-cloned slot, so marshaling
+// is race-free against the actor that still owns the live slot.
+func slotInfoMsgFor(frame *model.Frame, slotName string, slot *model.Slot) slotInfoMsg {
+	return slotInfoMsg{
+		Frame:    frameHeaderOf(frame),
 		SlotName: slotName,
 		Slot:     model.CloneFrame(&model.Frame{Slots: map[string]*model.Slot{slotName: slot}}).Slots[slotName],
-	})
-	h.dedupLossy(h.lastSlot, frameIP+"|"+slotName, payload)
+	}
 }
 
 // FrameError reports a per-frame error (note: field is "error", which app.js reads).

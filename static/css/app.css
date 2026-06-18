@@ -203,6 +203,15 @@ header:has(.collapseHeader:checked) + .collapseSection { display: grid; padding-
 .commandCont.cmdFailed .commandRead { box-shadow: inset 2px 0 0 var(--warn); outline: 1px dashed #b9842f; outline-offset: 2px; }
 .commandCont.cmdFailed .commandName::after { content: " ⚠"; color: var(--warn); }
 
+/* ---------- port-in-use notice (desktop) ---------- */
+.portNotice {
+   position: fixed; top: 0; left: 0; right: 0; z-index: 3000;
+   display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+   padding: 0.4rem 1rem; background: var(--warn-bg, #4a3a13); color: #ffce5a;
+   border-bottom: 1px solid #473a1f; font-size: 0.95rem;
+}
+.portNotice code { color: #fff; background: rgba(0,0,0,0.3); padding: 0.05rem 0.3rem; border-radius: 4px; }
+
 /* ---------- offline / staged ---------- */
 .slotCont.offline { display: none; }
 .showOffline .slotCont.offline { display: block; }

@@ -18,12 +18,12 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net"
 	"os"
 	"path/filepath"
 
 	"github.com/Xeue/Demeter/internal/app"
 	"github.com/Xeue/Demeter/internal/config"
+	"github.com/Xeue/Demeter/internal/web"
 	webview "github.com/webview/webview_go"
 )
 
@@ -74,10 +74,13 @@ func main() {
 	}
 
 	// Serve on the configured address (default :8080) so other browsers can reach
-	// this instance — same as the headless server. Auth still applies.
-	ln, err := net.Listen("tcp", cfg.ListenAddr)
+	// this instance — same as the headless server. If the port is already taken
+	// (e.g. another app on 8080), probe upward (8081, 8082, …) so the app still
+	// starts instead of failing to bind / showing "page not found".
+	requested := cfg.ListenAddr
+	ln, err := web.Listen(requested)
 	if err != nil {
-		slog.Error("could not start web server", "addr", cfg.ListenAddr, "err", err)
+		slog.Error("could not start web server", "addr", requested, "err", err)
 		os.Exit(1)
 	}
 	go func() {
@@ -94,14 +97,21 @@ func main() {
 	}
 	// Point the window at loopback regardless of the bind address, so the
 	// loopback-only /desktop-login auto-login is honoured.
-	_, port, _ := net.SplitHostPort(ln.Addr().String())
-	slog.Info("Demeter desktop: web server listening", "addr", ln.Addr().String(), "browse", "http://<this-host>:"+port)
-	url := "http://127.0.0.1:" + port + "/desktop-login?token=" + token
+	reqPort, actPort := web.PortOf(requested), web.PortOf(ln.Addr().String())
+	slog.Info("Demeter desktop: web server listening", "addr", ln.Addr().String(), "browse", "http://<this-host>:"+actPort)
+	url := "http://127.0.0.1:" + actPort + "/desktop-login?token=" + token
 
 	w := webview.New(*debug)
 	defer w.Destroy()
 	w.SetTitle("Demeter")
 	w.SetSize(1640, 1220, webview.HintNone)
+	// If the default port was taken and we landed on a different one, tell the
+	// page so it can pop up a notice (the window itself is fine — it points at the
+	// real port — but the user should know the URL changed for browser access).
+	if reqPort != "" && reqPort != "0" && reqPort != actPort {
+		slog.Warn("default port in use — Demeter bound an alternate port", "requested", reqPort, "actual", actPort)
+		w.Init(fmt.Sprintf("window.__demeterPortNotice={requested:%q,actual:%q};", reqPort, actPort))
+	}
 	w.Navigate(url)
 	w.Run() // blocks until the window is closed
 

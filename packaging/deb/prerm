@@ -1,0 +1,15 @@
+#!/bin/sh
+# Demeter .deb pre-remove: stop the service before files are removed.
+set -e
+
+case "$1" in
+	remove|deconfigure)
+		systemctl stop demeter >/dev/null 2>&1 || true
+		systemctl disable demeter >/dev/null 2>&1 || true
+		;;
+	upgrade)
+		systemctl stop demeter >/dev/null 2>&1 || true
+		;;
+esac
+
+exit 0
