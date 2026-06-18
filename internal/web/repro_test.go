@@ -30,7 +30,7 @@ import (
 // TestRepro_TenFramesTwoOffline reproduces the field report: 10 frames, #7 and #8
 // unreachable. It drives the full stack with the MockDialer and reads the actual
 // `frames` snapshot back off the WebSocket, asserting all 10 frames survive and
-// the payload is valid JSON — to localise the missing-frames bug to backend vs UI.
+// the payload is valid JSON, to localise the missing-frames bug to backend vs UI.
 func TestRepro_TenFramesTwoOffline(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Defaults()

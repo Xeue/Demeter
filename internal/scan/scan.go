@@ -3,8 +3,8 @@
 // lines ~448-959). It talks to frames through device.Device connections (one per
 // IP, supplied by a Conns provider) and emits UI events through an Events sink.
 //
-// CheckFrame mutates the *copy* of a frame handed to it (the caller — the
-// per-frame actor — gives it an exclusive snapshot and later merges only the
+// CheckFrame mutates the *copy* of a frame handed to it (the caller, the
+// per-frame actor, gives it an exclusive snapshot and later merges only the
 // scanned fields back, so concurrent operator edits to prefered/enabled are not
 // lost). Comparisons go through model.ValuesEqualLoose so an already-correct
 // value is not re-blasted every cycle.
@@ -371,7 +371,7 @@ func (s *Scanner) scanSlot(ctx context.Context, frame *model.Frame, slot, addres
 
 	// Reboot needed = restart-flagged commands we actually sent this cycle.
 	// (Computed BEFORE the active merge below: rebootReasons uses sl.Active as the
-	// pre-blast "from" value for its from→to tooltip.)
+	// pre-blast "from" value for its from->to tooltip.)
 	reasons := rebootReasons(frameCommands, sl.Active, restart)
 	if directSent {
 		reasons = append(reasons, rebootReasons(cardCommands, sl.Active, restart)...)
@@ -380,7 +380,7 @@ func (s *Scanner) scanSlot(ctx context.Context, frame *model.Frame, slot, addres
 	sl.RebootReasons = reasons
 
 	// Reconcile active with the device's post-SET echo so the emitted slotInfo
-	// reflects reality immediately — rows clear to green and every UI pending
+	// reflects reality immediately: rows clear to green and every UI pending
 	// count drops now, instead of staying stale until the next (possibly slow)
 	// re-read. Deferred card commands aren't in `applied`, so they stay pending.
 	for cmd, v := range applied {
@@ -423,7 +423,7 @@ func (s *Scanner) checkCard(ctx context.Context, conns Conns, cardIP string) (in
 func (s *Scanner) batchGet(ctx context.Context, conns Conns, ip, addr, slot string, cmds []uint32) (map[uint32]model.Value, error) {
 	dev, err := conns.Device(ctx, ip)
 	if err != nil {
-		// TCP connect failed — preserve the underlying cause (refused/timeout/...).
+		// TCP connect failed: preserve the underlying cause (refused/timeout/...).
 		return nil, fmt.Errorf("connect %s: %w", ip, err)
 	}
 	if err := s.Pool.Acquire(ctx); err != nil {

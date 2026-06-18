@@ -1,4 +1,4 @@
-/* Demeter — flat, professional dark theme (redesign per docs/mockups/04-combined).
+/* Demeter - flat dark theme (redesign per docs/mockups/04-combined).
    Keeps the existing DOM contracts (collapse checkbox mechanic, .commandCont grid,
    .cardIface[data-status], slot grid-areas) so all handlers keep working; the look
    is what changes: flat surfaces, hairline borders, calm status instead of red fills. */
@@ -177,7 +177,7 @@ header:has(.collapseHeader:checked) + .collapseSection { display: grid; padding-
 }
 .commandCont:last-child { border-bottom: 0; }
 .commandName { font-weight: 550; }
-/* current value (on device) — calm status, not a red fill */
+/* current value (on device): calm status, not a red fill */
 .commandRead {
 	font-family: var(--mono); font-size: 12.5px; border-radius: 4px; padding: 2px 8px; width: auto;
 	color: #aeb8c2; background: transparent; border: 1px solid transparent;
@@ -199,7 +199,7 @@ header:has(.collapseHeader:checked) + .collapseSection { display: grid; padding-
 .form-switch:has(.commandEnabled:not(:checked)) ~ .commandInput { opacity: .45; }
 .form-switch:has(.commandEnabled:checked) ~ .commandComputed { opacity: .4; }
 
-/* failed control (SET rejected) — amber dashed marker */
+/* failed control (SET rejected): amber dashed marker */
 .commandCont.cmdFailed .commandRead { box-shadow: inset 2px 0 0 var(--warn); outline: 1px dashed #b9842f; outline-offset: 2px; }
 .commandCont.cmdFailed .commandName::after { content: " ⚠"; color: var(--warn); }
 

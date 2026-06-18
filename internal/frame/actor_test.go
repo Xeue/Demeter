@@ -109,7 +109,7 @@ func TestActorEditPreservedDuringScan(t *testing.T) {
 }
 
 // autoRebootActor builds a started actor that is blasting a restart-required
-// change (mode 4108: Static→DHCP) so a reboot becomes needed, with the given
+// change (mode 4108: Static to DHCP) so a reboot becomes needed, with the given
 // auto-reboot override and global default.
 func autoRebootActor(t *testing.T, ctx context.Context, override string, defaultOn bool) (*Actor, *device.FakeDevice, func() []string) {
 	t.Helper()
@@ -221,7 +221,7 @@ func TestActorImportFrameMergesConfig(t *testing.T) {
 
 	a.ImportFrame(&model.Frame{
 		IP: "10.0.0.1", Number: "9", Name: "X", Group: "g2", Type: "ucp",
-		Enabled: true, Scan: true, // import requests blasting — must be ignored
+		Enabled: true, Scan: true, // import requests blasting - must be ignored
 		Slots: map[string]*model.Slot{
 			"02": {Enabled: true, Staged: true, Prefered: map[string]model.FramePrefered{
 				"4108": {Value: model.IntVal(0), Enabled: true, Type: "select"},

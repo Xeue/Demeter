@@ -7,6 +7,7 @@ SERVICE=demeter
 RUN_USER=demeter
 DATA_DIR=/var/lib/demeter
 BIN=/usr/bin/demeter
+CRED="$DATA_DIR/INITIAL_ADMIN_PASSWORD"
 
 case "$1" in
 	configure)
@@ -19,16 +20,18 @@ case "$1" in
 		chown "$RUN_USER:$RUN_USER" "$DATA_DIR"
 		chmod 0750 "$DATA_DIR"
 
-		# First install (empty data dir): create an admin login and surface it.
+		# First install (empty data dir): create an admin login. If this fails for
+		# any reason, the service's own first-run bootstrap still generates one and
+		# writes the same INITIAL_ADMIN_PASSWORD file, so the password is never lost.
+		PASS=""
 		if [ -z "$(ls -A "$DATA_DIR" 2>/dev/null)" ]; then
-			PASS="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)"
+			PASS="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 16 || true)"
 			if runuser -u "$RUN_USER" -- "$BIN" --create-admin "admin:${PASS}" --data-dir "$DATA_DIR" >/dev/null 2>&1; then
-				CRED="$DATA_DIR/INITIAL_ADMIN_PASSWORD"
 				{ echo "username: admin"; echo "password: $PASS"; } > "$CRED" 2>/dev/null || true
 				chown "$RUN_USER:$RUN_USER" "$CRED" 2>/dev/null || true
 				chmod 0600 "$CRED" 2>/dev/null || true
-				echo "Demeter: created admin login  ->  admin / $PASS"
-				echo "Demeter: (also saved to $CRED)"
+			else
+				PASS="" # fall back to the service's bootstrap (writes $CRED on start)
 			fi
 		fi
 
@@ -37,7 +40,17 @@ case "$1" in
 		systemctl restart "$SERVICE" >/dev/null 2>&1 || true
 
 		IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-		echo "Demeter: running at http://${IP:-<server-ip>}:8080  (systemctl status $SERVICE)"
+		echo ""
+		echo "=================== Demeter installed ==================="
+		echo " URL:    http://${IP:-<server-ip>}:8080"
+		if [ -n "$PASS" ]; then
+			echo " Login:  admin / $PASS"
+		fi
+		echo " First-login password is saved here (root only):"
+		echo "   sudo cat $CRED"
+		echo " Change it in the GUI, then delete that file."
+		echo " Status: systemctl status $SERVICE   Logs: journalctl -u $SERVICE"
+		echo "========================================================"
 		;;
 esac
 

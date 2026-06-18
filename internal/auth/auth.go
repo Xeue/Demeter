@@ -7,6 +7,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -177,13 +178,30 @@ func (a *Auth) Bootstrap() error {
 		return err
 	}
 	if generated {
-		slog.Warn("ADMIN BOOTSTRAP: created initial admin account — change the password immediately",
+		slog.Warn("ADMIN BOOTSTRAP: created initial admin account - change the password immediately",
 			"username", user, "password", pass)
 		a.SetNotice(user, pass)
+		a.writeInitialPassword(user, pass)
 	} else {
 		slog.Info("ADMIN BOOTSTRAP: created initial admin from environment", "username", user)
 	}
 	return nil
+}
+
+// writeInitialPassword records a freshly generated admin password to a 0600 file
+// in the data dir, so a headless operator (who may never see stdout/journald)
+// can retrieve it for first login: `cat <dataDir>/INITIAL_ADMIN_PASSWORD`.
+// Best-effort — a failure to write it is logged but not fatal.
+func (a *Auth) writeInitialPassword(user, pass string) {
+	path := filepath.Join(a.dataDir, "INITIAL_ADMIN_PASSWORD")
+	body := fmt.Sprintf("username: %s\npassword: %s\n\n"+
+		"This is the auto-generated first-run admin login. Change the password in\n"+
+		"the GUI, then delete this file.\n", user, pass)
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		slog.Warn("could not write INITIAL_ADMIN_PASSWORD file", "path", path, "err", err)
+		return
+	}
+	slog.Warn("ADMIN BOOTSTRAP: password also saved to file", "path", path)
 }
 
 // Login verifies credentials and, on success, returns the user.
@@ -222,8 +240,6 @@ func (a *Auth) clearFailure(username string) {
 	delete(a.fails, username)
 	a.mu.Unlock()
 }
-
-// --- user management ---
 
 // CreateUser adds a new user (error if it exists).
 func (a *Auth) CreateUser(username, password string, role Role) error {

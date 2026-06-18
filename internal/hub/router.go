@@ -276,7 +276,7 @@ func (r *Router) dispatch(c *Client, env Envelope) {
 		h.auth.ClearNotice()
 
 	case "window":
-		// Electron window control — no-op in the headless server.
+		// Electron window control - no-op in the headless server.
 
 	default:
 		slog.Debug("hub: unknown command", "command", env.Command)

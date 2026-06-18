@@ -1,7 +1,7 @@
 // Package expr replaces the legacy eval() used in parseCommand (main.ts ~844)
 // with a small, bounded integer-arithmetic evaluator. It supports only integer
-// literals, + - * / %, parentheses and unary minus — no identifiers or function
-// calls — which both reproduces what Demeter's group values actually use and
+// literals, + - * / %, parentheses and unary minus (no identifiers or function
+// calls) which both reproduces what Demeter's group values actually use and
 // closes the eval() code-injection footgun.
 //
 // Substitution of the FRAME/SLOT/CARD/SPIGOT keywords happens in the scan layer
@@ -21,7 +21,7 @@ import (
 var ErrParse = errors.New("expr: not an arithmetic expression")
 
 // EvalValue evaluates a default-type command value. If the string is a valid
-// integer expression it returns an Int value (e.g. "2110-30" -> 2080, matching
+// integer expression it returns an Int value (e.g. "2110-30" gives 2080, matching
 // the legacy eval which subtracts); otherwise it falls back to the literal
 // string (e.g. "Static", "PTP"), exactly like parseCommand's catch branch.
 //
@@ -40,7 +40,7 @@ func EvalValue(s string) model.Value {
 }
 
 // EvalSmartIP evaluates a smartip value: split on '.', evaluate each octet as an
-// integer expression, and rejoin with '.'. This path is strict — a non-numeric
+// integer expression, and rejoin with '.'. This path is strict: a non-numeric
 // octet returns an error (matching parseCommand's smartip branch, which has no
 // per-octet fallback and propagates to the outer catch).
 func EvalSmartIP(s string) (string, error) {
@@ -56,9 +56,7 @@ func EvalSmartIP(s string) (string, error) {
 	return strings.Join(out, "."), nil
 }
 
-// --- recursive-descent integer evaluator ---
-//
-// grammar:
+// recursive-descent integer evaluator. grammar:
 //   expr   := term (('+' | '-') term)*
 //   term   := factor (('*' | '/' | '%') factor)*
 //   factor := '-' factor | '(' expr ')' | number

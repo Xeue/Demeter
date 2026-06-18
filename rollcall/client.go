@@ -21,7 +21,7 @@ const DefaultPort = 2050
 // connection at once. The reference RollCall Control Panel was observed issuing
 // requests strictly one-at-a-time (max 1 in-flight), so the safe default is 1.
 // Raise it with WithMaxInFlight once you've confirmed the frame tolerates
-// pipelining (set 0 for unbounded — not recommended until tested on hardware).
+// pipelining (set 0 for unbounded - not recommended until tested on hardware).
 const DefaultMaxInFlight = 1
 
 // Mode selects the RollCall transport dialect.
@@ -101,7 +101,7 @@ func WithSelf(a Addr) Option { return func(c *config) { c.self = a; c.selfSet = 
 func WithMode(m Mode) Option { return func(c *config) { c.mode = m } }
 
 // WithUnconnectedSetOpcode overrides the opcode used for an unconnected-mode SET.
-// No unconnected write was ever captured, so the default (OpUReq, 0x0b — the read
+// No unconnected write was ever captured, so the default (OpUReq, 0x0b - the read
 // request opcode reused with a value body) is a best guess; set this to try
 // another candidate (e.g. 0x0d) against a non-air frame without a rebuild.
 func WithUnconnectedSetOpcode(op Opcode) Option { return func(c *config) { c.usetOp = op } }
@@ -287,7 +287,7 @@ func (c *Client) Set(ctx context.Context, unit Addr, cmdID uint32, v Value) (Val
 		// Best-guess unconnected SET: the configured opcode (default 0x0b, the
 		// read-request opcode) carrying the value body in the same layout as the
 		// captured 0x0c reply (cmd u16, dataType u16, reserved u32, value).
-		// UNCONFIRMED (no write was captured) — the blast verify-and-retry flags
+		// UNCONFIRMED (no write was captured) - the blast verify-and-retry flags
 		// it if the device doesn't apply it; try another opcode via config if so.
 		body := binary.BigEndian.AppendUint16(nil, uint16(cmdID))
 		body = append(body, v.encodeUnconnected()...)
@@ -304,8 +304,8 @@ func (c *Client) Set(ctx context.Context, unit Addr, cmdID uint32, v Value) (Val
 // Open attaches to (subscribes) a unit and waits for the frame's ACK.
 //
 // In captures the reference client OPENs each unit it watches and re-OPENs it
-// about every 10s (a keepalive / re-attach). I/O does NOT require a prior Open —
-// GET/SET to an un-OPENed unit was observed to work — but a long-lived connection
+// about every 10s (a keepalive / re-attach). I/O does NOT require a prior Open -
+// GET/SET to an un-OPENed unit was observed to work, but a long-lived connection
 // likely needs periodic Opens to stay attached. Drive that from your per-frame
 // owner on a ~10s ticker; reconnect/backoff is intentionally the owner's job too
 // (the Client closes on the first read error and does not auto-redial).
@@ -419,7 +419,7 @@ func (c *Client) unregister(unit Addr, cmdID uint32, ch chan Message) {
 // (Src, CmdID) match first, then falls back to a waiter registered against the
 // zero "self/controller" address (Unit 0). A read addressed to unit 0x0000 (the
 // frame-address discovery, cmd 17044/16482) is answered by the real controller
-// unit (e.g. 0x1200), so the reply's Src differs from the request's Dst —
+// unit (e.g. 0x1200), so the reply's Src differs from the request's Dst -
 // confirmed on hardware (rcprobe). Card reads, whose reply Src equals the
 // request Dst, still match exactly and are unaffected.
 func (c *Client) dispatch(m Message) bool {
@@ -475,7 +475,7 @@ func (c *Client) readLoop() {
 		switch m.Opcode {
 		case OpReply, OpUReply:
 			// Satisfy an in-flight GET/SET if one is waiting; otherwise it's an
-			// unsolicited update — hand it to whoever is draining Notify.
+			// unsolicited update - hand it to whoever is draining Notify.
 			if !c.dispatch(m) {
 				select {
 				case c.notifyCh <- m:
@@ -486,7 +486,7 @@ func (c *Client) readLoop() {
 			// Acknowledges an OPEN; wake any waiter for that unit.
 			c.dispatchAck(m.Src)
 		case OpNack:
-			// Negative ack with no command id — can't be routed to a waiter, so
+			// Negative ack with no command id - can't be routed to a waiter, so
 			// the matching GET falls through to its timeout. (Absent cards reply
 			// with a normal "No Unit Fitted" OpUReply, not a NACK.)
 		default:

@@ -189,7 +189,7 @@ func (h *Hub) changedSince(seen map[string]uint64, key string, hashContent []byt
 	h.dedupMu.Lock()
 	defer h.dedupMu.Unlock()
 	if seen[key] == sum {
-		return false // identical to what we last sent — skip
+		return false // identical to what we last sent, skip
 	}
 	seen[key] = sum
 	return true
@@ -253,7 +253,7 @@ func (h *Hub) SlotInfo(frameIP string, frame *model.Frame, slotName string, slot
 // SlotInfoBatch coalesces all of a frame's just-scanned slots into ONE message,
 // emitted when the frame finishes scanning. Each slot is deduped individually
 // (unchanged slots add nothing), so a discovery/rescan burst that used to be N
-// per-slot messages becomes one message per frame — keeping a busy client's
+// per-slot messages becomes one message per frame, keeping a busy client's
 // send queue well under its cap instead of overflowing and getting dropped. The
 // client fans the items back through its normal per-slot render queue.
 func (h *Hub) SlotInfoBatch(frameIP string, frame *model.Frame, slotNames []string) {

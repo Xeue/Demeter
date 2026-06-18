@@ -5,7 +5,7 @@
 logs/
 *.log
 
-# Packet captures — may contain real facility IPs/MACs/hostnames
+# Packet captures - may contain real facility IPs/MACs/hostnames
 *.pcap
 *.pcapng
 /captures

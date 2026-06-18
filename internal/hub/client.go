@@ -78,7 +78,7 @@ func (h *Hub) Serve(ctx context.Context, conn *websocket.Conn, session *auth.Ses
 		c.trySend(encode(chLogs, logs))
 	}
 
-	// On first run, show the generated admin credentials — but ONLY to an
+	// On first run, show the generated admin credentials, but ONLY to an
 	// authenticated admin connecting over loopback (the desktop window), so the
 	// plaintext password is never sent to a remote client.
 	if c.requireRole(auth.RoleAdmin) && isLoopbackIP(remoteIP) {

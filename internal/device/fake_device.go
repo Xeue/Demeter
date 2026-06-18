@@ -21,7 +21,7 @@ type FakeDevice struct {
 	takes   []FakeTake
 	closed  bool
 
-	// GetDelay, if set, makes each Get block this long (respecting ctx) — used to
+	// GetDelay, if set, makes each Get block this long (respecting ctx), used to
 	// exercise concurrency/cancellation.
 	GetDelay time.Duration
 

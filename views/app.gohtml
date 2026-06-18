@@ -34,7 +34,7 @@
             <div class="ms-auto d-flex align-items-center gap-2">
                 <button class="btn btn-secondary btn-sm" id="importExport" data-bs-toggle="modal" data-bs-target="#importPop">Import / Export</button>
                 <button class="btn btn-secondary btn-sm" id="settingsBtn" title="Display &amp; scan settings">Settings</button>
-                <span class="navbar-text me-1" title="App version — quote this when reporting issues">v{{.Version}}</span>
+                <span class="navbar-text me-1" title="App version - quote this when reporting issues">v{{.Version}}</span>
                 <span class="navbar-text me-1">{{.Username}}</span>
                 <a class="btn btn-secondary btn-sm" href="/logout">Logout</a>
             </div>
@@ -55,7 +55,7 @@
                     <aside id="frameRail">
                         <div class="railHead">
                             <div class="railTitle">Frames <span class="r" id="railSummary"></span></div>
-                            <input class="form-control form-control-sm" id="frameSearch" type="search" placeholder="Search frames…">
+                            <input class="form-control form-control-sm" id="frameSearch" type="search" placeholder="Search frames...">
                         </div>
                         <div class="railList" id="railList"></div>
                         <div class="railFoot">
@@ -107,8 +107,8 @@
                         <option value="W">Warn+</option>
                         <option value="E">Error</option>
                     </select>
-                    <input id="logTextFilter" class="form-control form-control-sm w-auto" type="search" placeholder="Filter text…">
-                    <span class="navbar-text text-light ms-auto">Server log — newest first, last 500 lines</span>
+                    <input id="logTextFilter" class="form-control form-control-sm w-auto" type="search" placeholder="Filter text...">
+                    <span class="navbar-text text-light ms-auto">Server log - newest first, last 500 lines</span>
                 </div>
                 <section id="logs" class="overflow-auto flex-grow-1 px-2"></section>
             </section>
@@ -127,7 +127,7 @@
                     <div class="modal-body">
                         <!-- Export -->
                         <div class="ioPane" data-iotab="export">
-                            <p class="text-muted small mb-2">Tick the frames, cards and groups to export — ticking a group also ticks every frame assigned to it. Frames, cards and groups are all saved to one file.</p>
+                            <p class="text-muted small mb-2">Tick the frames, cards and groups to export - ticking a group also ticks every frame assigned to it. Frames, cards and groups are all saved to one file.</p>
                             <div class="d-flex gap-2 mb-2">
                                 <button class="btn btn-sm btn-secondary ioSelectAll">Select all</button>
                                 <button class="btn btn-sm btn-secondary ioSelectNone">Select none</button>
@@ -143,7 +143,7 @@
                                 <button class="btn btn-sm btn-secondary ioSelectNone">Select none</button>
                                 <button class="btn btn-primary ms-auto" id="importSelected" disabled>Import selected</button>
                             </div>
-                            <p class="text-muted small mb-2">Choose an exported file, tick what to import, then Import. Importing restores configuration and never turns blasting on — enable frames manually afterwards.</p>
+                            <p class="text-muted small mb-2">Choose an exported file, tick what to import, then Import. Importing restores configuration and never turns blasting on - enable frames manually afterwards.</p>
                             <div id="importTree" class="ioTree"></div>
                         </div>
                     </div>

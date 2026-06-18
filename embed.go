@@ -24,7 +24,7 @@ var StaticFS embed.FS
 //go:embed views
 var ViewsFS embed.FS
 
-// VersionFile is the canonical app version (single source of truth, Go-native —
+// VersionFile is the canonical app version (single source of truth, Go-native,
 // not tied to the legacy npm package.json). The Makefile reads the same file.
 //
 //go:embed VERSION

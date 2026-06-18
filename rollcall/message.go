@@ -13,7 +13,7 @@ var Magic = [2]byte{0x00, 0x0c}
 // Opcode is the first byte of a message's inner payload.
 type Opcode byte
 
-// Connected-session opcodes — what the RollCall Control Panel uses and what this
+// Connected-session opcodes - what the RollCall Control Panel uses and what this
 // Client implements. Command id and dataType are uint32.
 const (
 	OpAck       Opcode = 0x01 // server -> client: acknowledges an OPEN
@@ -29,7 +29,7 @@ const (
 // broadcasts a login (OpLogin), the target announces itself (OpIdentUnit), then it
 // sends OpUReq and gets OpUReply or OpNack. In this mode the command id and
 // dataType are uint16 (not uint32) and the address port is 0. Documented for
-// completeness / a possible alternative transport — see docs/ROLLCALL_PROTOCOL.md.
+// completeness / a possible alternative transport - see docs/ROLLCALL_PROTOCOL.md.
 const (
 	OpNack   Opcode = 0x00 // negative ack / error (carries no command id)
 	OpUReq   Opcode = 0x0b // unconnected request
@@ -77,7 +77,7 @@ func (o Opcode) unconnectedData() bool { return o == OpUReq || o == OpUReply }
 // Unit=0x10xx and a small Port; the client uses Net=0, Unit=0 and a small handle.
 //
 // NOTE: the exact mapping from the RollTrak CLI form `cmd@<net>:<addr>:<slot>`
-// to these three fields is not yet confirmed against hardware — see README.
+// to these three fields is not yet confirmed against hardware - see README.
 type Addr struct {
 	Net  uint16
 	Unit uint16
@@ -94,9 +94,9 @@ func (a Addr) String() string {
 //
 //	unit = (addr << 8) | slot,  net = 0,  port = 0
 //
-// Examples: a card in slot 5 behind a frame whose controller address is 0x12 →
+// Examples: a card in slot 5 behind a frame whose controller address is 0x12 ->
 // UnitAddr(0x12, 0x05) = unit 0x1205; a card addressed directly on its own IP
-// uses controller address 0x30 → UnitAddr(0x30, 0x00) = unit 0x3000.
+// uses controller address 0x30 -> UnitAddr(0x30, 0x00) = unit 0x3000.
 func UnitAddr(addr, slot uint8) Addr {
 	return Addr{Net: 0, Unit: uint16(addr)<<8 | uint16(slot), Port: 0}
 }
@@ -174,7 +174,7 @@ func (v Value) encode() []byte {
 //
 // where an int payload is a uint32 and a string is NUL-terminated ASCII. This
 // matches the observed unconnected REPLY layout. NOTE: no unconnected *write* was
-// ever captured, so using this to SET is UNCONFIRMED — validate on a non-air
+// ever captured, so using this to SET is UNCONFIRMED - validate on a non-air
 // frame (the blast verify-and-retry will flag it if the device rejects it).
 func (v Value) encodeUnconnected() []byte {
 	switch v.Kind {
@@ -339,13 +339,13 @@ func decodeConnectedValue(rest []byte) Value {
 			return Value{Kind: KindString, Str: cstr(rest[8:])}
 		}
 	}
-	return unknownValue(dataType, rest[4:]) // float/enum/truncated — surface, don't drop
+	return unknownValue(dataType, rest[4:]) // float/enum/truncated - surface, don't drop
 }
 
 // decodeUnconnectedValue parses an unconnected-mode value body. Confirmed against
 // captures + hardware:
 //
-//	int   (dataType 1): dataType(u16) | value          — NO reserved word, like
+//	int   (dataType 1): dataType(u16) | value          - NO reserved word, like
 //	                    connected int (value is u32, or u16 for a 2-byte body)
 //	string(dataType 2/3): dataType(u16) | reserved(u32) | NUL-terminated ASCII
 //
@@ -359,14 +359,14 @@ func decodeUnconnectedValue(rest []byte) Value {
 	dataType := uint32(binary.BigEndian.Uint16(rest[0:2]))
 	body := rest[2:]
 	switch dataType {
-	case 1: // int — value immediately follows the dataType (no reserved word)
+	case 1: // int: value immediately follows the dataType (no reserved word)
 		switch {
 		case len(body) >= 4:
 			return Value{Kind: KindInt, Int: binary.BigEndian.Uint32(body[0:4])}
 		case len(body) >= 2:
 			return Value{Kind: KindInt, Int: uint32(binary.BigEndian.Uint16(body[0:2]))}
 		}
-	case 2, 3: // string — a reserved u32 then NUL-terminated ASCII
+	case 2, 3: // string: a reserved u32 then NUL-terminated ASCII
 		if len(body) >= 4 {
 			return Value{Kind: KindString, Str: cstr(body[4:])}
 		}

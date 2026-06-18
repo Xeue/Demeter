@@ -1,5 +1,5 @@
 [Unit]
-Description=Demeter — bulk programmer for GV UCP/IQ broadcast cards
+Description=Demeter - bulk programmer for GV UCP/IQ broadcast cards
 Documentation=https://github.com/Xeue/Demeter
 After=network-online.target
 Wants=network-online.target

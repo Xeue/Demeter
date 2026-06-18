@@ -120,7 +120,7 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 //   - Int vs Str -> coerce the string with JS Number() semantics and compare
 //
 // The shuffle index comparison (indexOf of fixed labels) is NOT routed through
-// here — it is a plain integer compare in the scan layer.
+// here. It is a plain integer compare in the scan layer.
 func ValuesEqualLoose(a, b Value) bool {
 	if a.Kind == KindNone || b.Kind == KindNone {
 		return a.Kind == KindNone && b.Kind == KindNone
@@ -148,7 +148,7 @@ func ValuesEqualLoose(a, b Value) bool {
 // jsNumber mimics JS Number(s) for the inputs we hit: trimmed empty string is 0,
 // otherwise a base-10 numeric parse; non-numeric is NaN (ok=false). It does not
 // reproduce JS hex/`0x` parsing (Demeter never stores 0x values in compared
-// fields — frame unit addresses are parsed separately).
+// fields; frame unit addresses are parsed separately).
 func jsNumber(s string) (float64, bool) {
 	t := strings.TrimSpace(s)
 	if t == "" {

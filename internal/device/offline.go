@@ -8,7 +8,7 @@ import (
 	"github.com/Xeue/Demeter/internal/model"
 )
 
-// SEAM #3 — how an offline / unreachable unit surfaces.
+// SEAM #3 - how an offline / unreachable unit surfaces.
 //
 // The legacy app detected offline cards by textual sentinels in rolltrak's
 // stdout. Natively those strings do not exist: an absent unit either errors or
@@ -19,7 +19,7 @@ import (
 // 298-parameter batch. This is the place to adapt when the real offline wire
 // behaviour (error frame? silence?) is known.
 
-// ErrUnitOffline means a unit (card) did not answer in time / is unreachable.
+// ErrUnitOffline means a unit (card) did not answer in time or is unreachable.
 var ErrUnitOffline = errors.New("device: unit offline/unreachable")
 
 // ErrFrameUnreachable means the frame connection itself could not be opened
@@ -27,7 +27,7 @@ var ErrUnitOffline = errors.New("device: unit offline/unreachable")
 var ErrFrameUnreachable = errors.New("device: frame unreachable")
 
 // ErrFrameNoResponse means the TCP connection opened but the frame answered no
-// GETs — i.e. it is reachable on the network but not replying on the RollCall
+// GETs, i.e. it is reachable on the network but not replying on the RollCall
 // protocol (likely the connect handshake/addressing, not connectivity). Kept
 // distinct from ErrFrameUnreachable so the UI/log can point at the right cause.
 var ErrFrameNoResponse = errors.New("device: frame not responding")

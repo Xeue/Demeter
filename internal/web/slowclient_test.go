@@ -26,7 +26,7 @@ import (
 
 // TestRepro_SlowClientLosesLaterFrames simulates a real browser that can't drain
 // the WebSocket as fast as the scan loop fires per-slot updates: it reads slowly.
-// With 10 latency-simulating frames it reproduces the field report — the later
+// With 10 latency-simulating frames it reproduces the field report: the later
 // frames' slotInfo/frameStatus never arrive (and/or the client gets disconnected).
 func TestRepro_SlowClientLosesLaterFrames(t *testing.T) {
 	dir := t.TempDir()
@@ -147,10 +147,10 @@ func TestRepro_SlowClientLosesLaterFrames(t *testing.T) {
 	// With server-side dedup the steady-state firehose is gone, so even a paced
 	// client receives every online frame's cards and both offline statuses.
 	if len(gotSlots) < 8 {
-		t.Errorf("only %d/8 online frames delivered card data — later frames still starved", len(gotSlots))
+		t.Errorf("only %d/8 online frames delivered card data - later frames still starved", len(gotSlots))
 	}
 	if len(gotOffline) < 2 {
-		t.Errorf("only %d/2 unreachable frames reported offline — offline status still lost", len(gotOffline))
+		t.Errorf("only %d/2 unreachable frames reported offline - offline status still lost", len(gotOffline))
 	}
 }
 

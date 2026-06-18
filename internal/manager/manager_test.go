@@ -51,7 +51,7 @@ func TestImportDataCreatesFramesAndGroups(t *testing.T) {
 	imp := model.Frames{
 		"10.0.0.1": {
 			IP: "10.0.0.1", Number: "7", Name: "Studio A", Group: "g1", Type: "ucp",
-			Enabled: true, // import requests blasting on — must be ignored
+			Enabled: true, // import requests blasting on - must be ignored
 			Scan:    false,
 			Slots: map[string]*model.Slot{
 				"01": {

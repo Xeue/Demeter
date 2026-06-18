@@ -164,8 +164,8 @@ func (a *App) startBackground(ctx context.Context) {
 	}
 }
 
-// Run binds the web server — probing for a free port from the configured one if
-// it is already in use — then starts the background goroutines and serves until
+// Run binds the web server (probing for a free port from the configured one if
+// it is already in use), then starts the background goroutines and serves until
 // ctx is cancelled.
 func (a *App) Run(ctx context.Context) error {
 	requested := a.Cfg.ListenAddr
@@ -176,7 +176,7 @@ func (a *App) Run(ctx context.Context) error {
 	a.Cfg.ListenAddr = ln.Addr().String()
 	a.startBackground(ctx)
 	if reqP, actP := web.PortOf(requested), web.PortOf(ln.Addr().String()); reqP != "" && reqP != "0" && reqP != actP {
-		slog.Warn("requested port in use — bound an alternate port", "requested", reqP, "actual", actP)
+		slog.Warn("requested port in use, bound an alternate port", "requested", reqP, "actual", actP)
 	}
 	slog.Info("Demeter started", "version", version(), "listen", ln.Addr().String(), "data", a.Cfg.DataDir)
 	return a.Srv.Serve(ctx, ln)

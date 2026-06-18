@@ -25,7 +25,7 @@ func (c *countingEvents) SlotInfoBatch(string, *model.Frame, []string)       {}
 func (c *countingEvents) FrameError(string, string)                          {}
 
 // TestActorPollNowRetriesAfterInflight: an operator "try again" (PollNow) issued
-// while a scan is already running must not be dropped — it runs a fresh scan as
+// while a scan is already running must not be dropped - it runs a fresh scan as
 // soon as the in-flight one finishes (the rescan-queued path).
 func TestActorPollNowRetriesAfterInflight(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())

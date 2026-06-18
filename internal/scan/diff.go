@@ -13,7 +13,7 @@ import (
 
 // rebootReasons returns one human-readable reason per restart-flagged command in
 // `sent` (the commands actually blasted this cycle), e.g.
-// "IP (4101): 10.40.44.12 → 10.40.44.20". Order is stable for the UI and tests.
+// "IP (4101): 10.40.44.12 -> 10.40.44.20". Order is stable for the UI and tests.
 func rebootReasons(sent map[string]sendCmd, active map[string]model.Value, restart map[uint32]string) []string {
 	if len(restart) == 0 || len(sent) == 0 {
 		return nil
@@ -64,7 +64,7 @@ func buildCommands(sl *model.Slot, checkNull bool) (frameCommands, cardCommands 
 			}
 		} else {
 			if !activePresent {
-				continue // can't compare -> skip
+				continue // can't compare, skip
 			}
 			if model.ValuesEqualLoose(cmd.Value, active) {
 				continue // already correct
@@ -98,7 +98,7 @@ func buildCommands(sl *model.Slot, checkNull bool) (frameCommands, cardCommands 
 		}
 		active := sl.Active[command]
 		if model.ValuesEqualLoose(cmd.Value, active) {
-			delete(frameCommands, command) // already correct -> drop any group-queued frame write
+			delete(frameCommands, command) // already correct, drop any group-queued frame write
 			continue
 		}
 		cmdNum := uint32(mustAtoi(command))
@@ -219,7 +219,7 @@ func (s *Scanner) doCommands(ctx context.Context, conns Conns, cmds map[string]s
 // setVerified sends a SET and confirms the device's echoed value matches what we
 // sent, retrying up to VerifyAttempts. It returns (ok, applied, reason): `applied`
 // is the device's actual current value (its echo) to write back into the slot's
-// active map so the UI reflects reality immediately — on success it's the new
+// active map so the UI reflects reality immediately - on success it's the new
 // value (row clears), on a rejected SET it's the unchanged device value (row
 // correctly stays pending), and on a transport error it's None (caller must not
 // touch active). This is the immediate, within-cycle retry that complements the
@@ -245,7 +245,7 @@ func (s *Scanner) setVerified(ctx context.Context, dev device.Device, addr, slot
 		}
 	}
 	if err != nil {
-		// No trustworthy device value — leave active as the pre-blast read.
+		// No trustworthy device value, leave active as the pre-blast read.
 		return false, model.None(), fmt.Sprintf("device error after %d attempts: %v", attempts, err)
 	}
 	// Rejected: `got` is the device's actual value (still != target), so active

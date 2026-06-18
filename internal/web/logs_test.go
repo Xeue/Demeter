@@ -18,7 +18,7 @@ import (
 )
 
 // TestLogHistoryReplayedOnConnect: a log buffered before a client connects is
-// replayed to it as a "logs" batch — so the Logs page is populated on open
+// replayed to it as a "logs" batch, so the Logs page is populated on open
 // rather than empty.
 func TestLogHistoryReplayedOnConnect(t *testing.T) {
 	dir := t.TempDir()

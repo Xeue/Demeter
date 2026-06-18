@@ -1,5 +1,5 @@
 // Package pool provides a bounded, context-aware semaphore that caps the total
-// number of concurrent RollCall operations across all frames — the real version
+// number of concurrent RollCall operations across all frames - the real version
 // of the legacy `jobs` counter (main.ts), which was only logged, never enforced.
 package pool
 

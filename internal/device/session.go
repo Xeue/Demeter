@@ -2,13 +2,13 @@ package device
 
 import "github.com/Xeue/Demeter/rollcall"
 
-// SEAM #2 — connect handshake.
+// SEAM #2 - connect handshake.
 //
 // rolltrak (the legacy client, which worked) spoke RollCall "unconnected" mode;
 // the Go client speaks "connected" mode (persistent + notifies). A connected
 // session in the capture begins with the client announcing itself (IDENTITY_SELF,
 // opcode 0x21) before GETs are answered. The Go client.Dial connects raw, so a
-// frame that requires that login answers nothing — which surfaces as
+// frame that requires that login answers nothing, which surfaces as
 // "Cannot reach frame".
 //
 // startSession (gated by Dialer.Handshake, default off) replays the captured

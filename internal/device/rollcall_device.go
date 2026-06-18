@@ -20,7 +20,7 @@ const (
 
 // ParseMode maps a config string to a rollcall transport mode. Anything other
 // than "connected" (case-insensitive) is the default, Unconnected (RollTrak
-// dialect, port-0 addressing) — the mode Demeter's addressing matches.
+// dialect, port-0 addressing), the mode Demeter's addressing matches.
 func ParseMode(s string) rollcall.Mode {
 	if strings.EqualFold(strings.TrimSpace(s), "connected") {
 		return rollcall.Connected
@@ -40,22 +40,22 @@ func ParseSetOpcode(s string) rollcall.Opcode {
 // RollcallDialer opens real RollCall connections (one persistent client per
 // frame IP).
 type RollcallDialer struct {
-	// Mode selects the RollCall dialect (default Connected — the zero value).
+	// Mode selects the RollCall dialect (default Connected, the zero value).
 	// app.go sets this from config (default Unconnected).
 	Mode rollcall.Mode
-	// SetOpcode overrides the unconnected-mode SET opcode (0 => default 0x0b).
+	// SetOpcode overrides the unconnected-mode SET opcode (0 -> default 0x0b).
 	SetOpcode rollcall.Opcode
-	// Port overrides the RollCall TCP port (0 => rollcall.DefaultPort).
+	// Port overrides the RollCall TCP port (0 -> rollcall.DefaultPort).
 	Port int
-	// PerGetTimeout bounds a single GET so an absent unit fails fast (0 => default).
+	// PerGetTimeout bounds a single GET so an absent unit fails fast (0 -> default).
 	PerGetTimeout time.Duration
-	// BatchConcurrency caps simultaneous GETs within one BatchGet (0 => default).
+	// BatchConcurrency caps simultaneous GETs within one BatchGet (0 -> default).
 	BatchConcurrency int
 	// DialTimeout bounds the TCP connect so an unreachable card (the normal
 	// mid-provisioning state) fails fast instead of blocking on the OS timeout
-	// (0 => default).
+	// (0 -> default).
 	DialTimeout time.Duration
-	// Handshake enables the (gated) connect-time IDENTITY login in SEAM #2 — try
+	// Handshake enables the (gated) connect-time IDENTITY login in SEAM #2: try
 	// it when a frame connects (TCP) but never answers RollCall GETs.
 	Handshake bool
 }
@@ -106,7 +106,7 @@ func orInt(v, def int) int {
 }
 
 // rollcallDevice is one persistent connection to one frame, multiplexing all
-// units behind it — the replacement for spawning rolltrak.exe per command.
+// units behind it: the replacement for spawning rolltrak.exe per command.
 type rollcallDevice struct {
 	c                *rollcall.Client
 	perGetTimeout    time.Duration

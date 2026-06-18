@@ -115,7 +115,7 @@ func TestUnconnectedFrameAddressReply(t *testing.T) {
 }
 
 // TestClientUnconnectedSetEchoes: a unconnected SET (best-guess opcode 0x0b with
-// a value body) round-trips — the fake frame echoes the value in a 0x0c reply and
+// a value body) round-trips - the fake frame echoes the value in a 0x0c reply and
 // Set returns it (this is what the blast verify-and-retry checks against).
 func TestClientUnconnectedSetEchoes(t *testing.T) {
 	cliConn, srvConn := net.Pipe()
@@ -153,7 +153,7 @@ func TestClientUnconnectedSetEchoes(t *testing.T) {
 }
 
 // TestUnconnectedSetCustomOpcode: the SET opcode is configurable for hardware
-// trial-and-error — the encoded first inner byte must be the chosen opcode, with
+// trial-and-error - the encoded first inner byte must be the chosen opcode, with
 // the value body unchanged.
 func TestUnconnectedSetCustomOpcode(t *testing.T) {
 	body := binary.BigEndian.AppendUint16(nil, uint16(4101))
@@ -219,8 +219,8 @@ func TestUnconnectedReplyDecode(t *testing.T) {
 	}
 }
 
-// TestUnconnectedIntReply: an integer reply (dataType 1) — e.g. a select/enum
-// index like Reference Source — has NO reserved word (value follows dataType
+// TestUnconnectedIntReply: an integer reply (dataType 1), e.g. a select/enum
+// index like Reference Source, has NO reserved word (value follows dataType
 // directly). Getting this right is what makes the select fields read instead of
 // showing "undefined".
 func TestUnconnectedIntReply(t *testing.T) {
@@ -254,7 +254,7 @@ func encodeControl(dst, src Addr, inner []byte) []byte {
 	return append(out, b...)
 }
 
-// TestUnconnectedNoUnitFitted: dataType 3 ("No Unit Fitted") — an absent slot —
+// TestUnconnectedNoUnitFitted: dataType 3 ("No Unit Fitted"), an absent slot,
 // decodes as the status string so the scan treats it as not-a-UCP.
 func TestUnconnectedNoUnitFitted(t *testing.T) {
 	m, _, err := Decode(frame("0000000000ff00001200000000190c0040930003000000004e6f20556e69742046697474656400"))

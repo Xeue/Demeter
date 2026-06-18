@@ -86,7 +86,7 @@ func TestFrameStatusDedup(t *testing.T) {
 }
 
 // TestSlotInfoBatchCoalesces: a frame's slots are emitted as ONE batch message,
-// per-slot deduped, with an unchanged batch suppressed entirely — this is the
+// per-slot deduped, with an unchanged batch suppressed entirely - this is the
 // per-frame coalescing that collapses a fleet-discovery burst from N messages to
 // one per frame so a busy client's send queue can't overflow.
 func TestSlotInfoBatchCoalesces(t *testing.T) {

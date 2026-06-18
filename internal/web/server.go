@@ -94,7 +94,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 // handleDesktopLogin lets the bundled desktop window auto-authenticate over
 // loopback: it accepts a freshly-minted session token in the query, sets the
 // cookie, and redirects to the app. It only honours loopback requests, and the
-// token must already be a valid session — so it adds no attack surface beyond
+// token must already be a valid session, so it adds no attack surface beyond
 // "you already have the cookie".
 func (s *Server) handleDesktopLogin(w http.ResponseWriter, r *http.Request) {
 	if !isLoopback(r) {

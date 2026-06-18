@@ -10,7 +10,7 @@ import (
 )
 
 // fakeFrame answers GET/SET on an in-memory connection, swapping addresses and
-// echoing a canned value — enough to exercise framing + reply routing with no
+// echoing a canned value - enough to exercise framing + reply routing with no
 // real hardware.
 func fakeFrame(t *testing.T, conn net.Conn, answer func(req Message) Message) {
 	t.Helper()

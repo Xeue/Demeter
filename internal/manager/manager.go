@@ -448,7 +448,7 @@ func (m *Manager) ExportSnapshot() (model.Frames, model.Groups) {
 
 // ImportData merges (upserts) the selected frames and groups into the current
 // state without touching anything not present in the import. Existing frames get
-// their config merged (see actor.importFrame — blasting is never auto-enabled);
+// their config merged (see actor.importFrame - blasting is never auto-enabled);
 // new frames are created (blasting off). Groups are upserted. Persists + broadcasts.
 func (m *Manager) ImportData(frames model.Frames, groups model.Groups) {
 	// Groups: upsert.

@@ -187,7 +187,7 @@ func TestGetFrameAddress(t *testing.T) {
 }
 
 // applyScenario builds a Scan-only frame (Enabled=false) with a pending frame
-// command (4108: Static→DHCP) and returns the frame device so a test can inspect
+// command (4108: Static->DHCP) and returns the frame device so a test can inspect
 // what was blasted.
 func applyScenario(t *testing.T) (*Scanner, *model.Frame, model.Groups, *testConns, *device.FakeDevice) {
 	t.Helper()
@@ -223,7 +223,7 @@ func has4108Set(fd *device.FakeDevice) bool {
 
 // TestApplyOnceForceBlast: in Scan-only mode (frame.Enabled=false) a normal scan
 // does NOT blast, but forceBlast=true (operator Apply) writes the pending change
-// once — and the frame is never flipped to Enabled.
+// once - and the frame is never flipped to Enabled.
 func TestApplyOnceForceBlast(t *testing.T) {
 	t.Run("scan only does not blast", func(t *testing.T) {
 		s, frame, groups, conns, fd := applyScenario(t)
@@ -276,7 +276,7 @@ func TestCheckFrameEndToEnd(t *testing.T) {
 	fd.Seed("10", "01", 4128, model.StrVal("UP"))
 	fd.Seed("10", "01", 4108, model.IntVal(1)) // mode currently Static(1)
 	// card IO + at least one of the 298 card params (so the full read is non-empty
-	// and checkCard succeeds, setting ins/outs) — addr 30 slot 00 on the card IP.
+	// and checkCard succeeds, setting ins/outs) - addr 30 slot 00 on the card IP.
 	cd.Seed("30", "00", 18000, model.StrVal("4 In 8 Out"))
 	cd.Seed("30", "00", 4108, model.IntVal(1))
 
@@ -304,7 +304,7 @@ func TestCheckFrameEndToEnd(t *testing.T) {
 		t.Errorf("ins/outs = %d/%d want 4/8", sl.Ins, sl.Outs)
 	}
 	// After the blast, active is reconciled from the device's SET echo to the
-	// just-applied target (0), not the stale pre-blast 1 — so the UI clears at
+	// just-applied target (0), not the stale pre-blast 1, so the UI clears at
 	// once instead of waiting for the next re-read.
 	if sl.Active["4108"].Int != 0 {
 		t.Errorf("active 4108 = %v want 0 (reconciled from SET echo)", sl.Active["4108"])
@@ -328,7 +328,7 @@ func TestCheckFrameEndToEnd(t *testing.T) {
 // TestWorkflow_UnreachableCard_SetsIPViaFrame_DefersBulk verifies the core
 // programming workflow: a discovered card whose own IP we can't yet route to
 // still gets its IP/mode set VIA THE FRAME, while the bulk (direct-to-card)
-// settings are deferred — they are NOT misrouted through the frame, and the
+// settings are deferred - they are NOT misrouted through the frame, and the
 // scan does not error. Once the card is rebooted onto a reachable IP, a later
 // cycle pushes the bulk directly (covered by TestCheckFrameEndToEnd's path).
 func TestWorkflow_UnreachableCard_SetsIPViaFrame_DefersBulk(t *testing.T) {
@@ -340,7 +340,7 @@ func TestWorkflow_UnreachableCard_SetsIPViaFrame_DefersBulk(t *testing.T) {
 	conns := newTestConns()
 
 	const frameIP = "10.0.0.1"
-	const cardIP = "192.168.0.50" // card's current IP — not routable from us yet
+	const cardIP = "192.168.0.50" // card's current IP, not routable from us yet
 	fd := conns.dev(frameIP)
 
 	fd.Seed("00", "00", 17044, model.StrVal("unit = 0x10")) // frame address 10

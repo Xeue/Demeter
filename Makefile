@@ -65,7 +65,7 @@ version:
 server:
 	@mkdir -p $(DIST)
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o $(DIST)/$(BIN) ./cmd/demeter
-	@echo "Built $(DIST)/$(BIN) — run: ./$(DIST)/$(BIN)"
+	@echo "Built $(DIST)/$(BIN) - run: ./$(DIST)/$(BIN)"
 
 ## Native desktop app (current OS) -> Demeter-v<version>-desktop-<os>-<arch>[.exe]
 desktop:
@@ -82,7 +82,7 @@ desktop-macapp:
 	sed 's/__VERSION__/$(VERSION)/' packaging/macos/Info.plist > $(OUT)-desktop-macos.app/Contents/Info.plist
 	cp /tmp/$(DESKTOP)-macapp $(OUT)-desktop-macos.app/Contents/MacOS/$(DESKTOP)
 	-sips -s format icns static/img/icon/icon.png --out $(OUT)-desktop-macos.app/Contents/Resources/icon.icns >/dev/null 2>&1 || true
-	@echo "Built $(OUT)-desktop-macos.app (v$(VERSION)) — double-click it, or run: open $(OUT)-desktop-macos.app"
+	@echo "Built $(OUT)-desktop-macos.app (v$(VERSION)) - double-click it, or run: open $(OUT)-desktop-macos.app"
 
 ## Headless server for Windows x64 (cross-compiles from anywhere, no C toolchain)
 server-windows:
@@ -124,7 +124,7 @@ dist-linux: server-linux
 ## Needs dpkg-deb (macOS: 'brew install dpkg'; Debian/CI: built in).
 ## ARM: make deb DEB_ARCH=arm64
 deb:
-	@command -v dpkg-deb >/dev/null 2>&1 || { echo "dpkg-deb not found — macOS: 'brew install dpkg'; or build on a Debian box / CI"; exit 1; }
+	@command -v dpkg-deb >/dev/null 2>&1 || { echo "dpkg-deb not found - macOS: 'brew install dpkg'; or build on a Debian box / CI"; exit 1; }
 	@mkdir -p $(DIST)
 	CGO_ENABLED=0 GOOS=linux GOARCH=$(DEB_ARCH) go build -ldflags="$(LDFLAGS)" -o /tmp/demeter-deb-bin ./cmd/demeter
 	rm -rf /tmp/demeter-deb
@@ -142,17 +142,17 @@ deb:
 deb-arm64:
 	$(MAKE) deb DEB_ARCH=arm64
 
-## RollCall connectivity probe (current OS) — diagnose "Cannot reach frame"
+## RollCall connectivity probe (current OS) - diagnose "Cannot reach frame"
 probe:
 	@mkdir -p $(DIST)
 	CGO_ENABLED=0 go build -o $(DIST)/rcprobe ./cmd/rcprobe
-	@echo "Built $(DIST)/rcprobe — run: ./$(DIST)/rcprobe -frame <frameIP>"
+	@echo "Built $(DIST)/rcprobe - run: ./$(DIST)/rcprobe -frame <frameIP>"
 
 ## RollCall probe for Windows x64 (ship rcprobe.exe to a site to test their frame)
 probe-windows:
 	@mkdir -p $(DIST)
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o $(DIST)/rcprobe-windows-amd64.exe ./cmd/rcprobe
-	@echo "Built $(DIST)/rcprobe-windows-amd64.exe — run: rcprobe-windows-amd64.exe -frame <frameIP>"
+	@echo "Built $(DIST)/rcprobe-windows-amd64.exe - run: rcprobe-windows-amd64.exe -frame <frameIP>"
 
 ## Run the full test suite with the race detector
 test:

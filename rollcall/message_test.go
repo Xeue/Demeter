@@ -8,7 +8,7 @@ import (
 
 // Real bytes captured from a RollCall Control Panel session (Rollcall.pcapng).
 // client 10.40.40.190 <-> frame 10.40.44.10:2050. These are the ground truth the
-// codec is validated against — no hardware required.
+// codec is validated against - no hardware required.
 //
 // unit = 0000:1005:0001, client = 0000:0000:0005
 var (

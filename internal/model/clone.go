@@ -2,7 +2,7 @@ package model
 
 import "encoding/json"
 
-// CloneFrame returns a deep copy of a frame (via JSON round-trip — the custom
+// CloneFrame returns a deep copy of a frame (via JSON round-trip - the custom
 // Value (un)marshalling round-trips exactly).
 func CloneFrame(f *Frame) *Frame {
 	if f == nil {

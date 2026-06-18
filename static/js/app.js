@@ -210,7 +210,7 @@ function addFrame() {
 // mediaText renders a card interface line, tolerating absent values (e.g. a
 // staged card that has no IPs yet) instead of printing "undefined".
 function mediaText(n, ip, up, sfp) {
-	return `Media ${n}: ${ip == null || ip === '' ? '—' : ip} - ${up || '—'}/${sfp || '—'}`;
+	return `Media ${n}: ${ip == null || ip === '' ? '-' : ip} - ${up || '-'}/${sfp || '-'}`;
 }
 
 // stageCard pre-configures a slot before its card is online. The server persists
@@ -269,7 +269,7 @@ function drawFrames(frames) {
 	// Establish / preserve the selected frame.
 	if (!window.selectedFrame || !frames[window.selectedFrame]) window.selectedFrame = ips[0] || null;
 	if (window.selectedFrame) selectFrame(window.selectedFrame);
-	else _detail.innerHTML = '<div class="detailEmpty">No frames yet — add one on the left</div>';
+	else _detail.innerHTML = '<div class="detailEmpty">No frames yet - add one on the left</div>';
 }
 
 // renderRail builds the fleet sidebar from window.frames: status square, name/IP,
@@ -327,7 +327,7 @@ function framePending(ip) {
 
 // boolNorm/looseEqual mirror the backend model.ValuesEqualLoose so a row's
 // red/green matches what the scanner will actually write (numeric coercion;
-// booleans normalised to 0/1) — avoiding false reds from '1' vs 1 / True vs 1.
+// booleans normalised to 0/1), avoiding false reds from '1' vs 1 / True vs 1.
 function boolNorm(x) { return (x === 1 || x === '1' || x === true || x === 'true' || x === 'True') ? 1 : 0; }
 function looseEqual(a, b, type) {
 	if (type === 'boolean') return boolNorm(a) === boolNorm(b);
@@ -349,7 +349,7 @@ function commandTarget(prefered, enabled, computed) {
 }
 
 // isPending: a row counts as a pending write only when it is red (differs from a
-// real target) AND managed — an override that actually carries a value, or a
+// real target) AND managed: an override that actually carries a value, or a
 // group target (a bare checked-but-empty override is NOT pending, matching the
 // backend which skips value-less overrides).
 function isPending(_c) {
@@ -457,7 +457,7 @@ function gatherChanges(ip) {
 			out.push({
 				slot,
 				name: _c.getAttribute('data-name') || '',
-				current: (_read.textContent || '').replace(/^[●▸]\s*/, '').trim() || '—',
+				current: (_read.textContent || '').replace(/^[●▸]\s*/, '').trim() || '-',
 				target: readTargetFromRow(_c),
 				source: ov && ov.checked ? 'Override' : 'Group',
 			});
@@ -481,7 +481,7 @@ function openChangesPop(ip, anchor) {
 		`<td><span class="chip ${c.source === 'Override' ? 'warn' : ''}">${c.source}</span></td></tr>`).join('');
 	const el = document.createElement('div');
 	el.className = 'changesPop';
-	el.innerHTML = `<header>Pending changes — F${escapeHTML(f.number || '')} ${escapeHTML(f.name || '')}<button class="x" title="Close">✕</button></header>` +
+	el.innerHTML = `<header>Pending changes - F${escapeHTML(f.number || '')} ${escapeHTML(f.name || '')}<button class="x" title="Close">✕</button></header>` +
 		`<div class="body"><table><thead><tr><th>Setting</th><th>On device</th><th>Target</th><th>Source</th></tr></thead>` +
 		`<tbody>${rows || '<tr><td colspan="4" class="muted">No pending changes</td></tr>'}</tbody></table></div>` +
 		`<footer><span class="muted">${changes.length} setting(s) will be written to the card(s)</span>` +
@@ -548,7 +548,7 @@ function drawSlotInfo(slotInfo) {
 // drawSlotInfoBatch receives a whole frame's slots in one message (server-side
 // coalescing) and fans them into the same per-slot queue, so the rest of the
 // render path (the single requestAnimationFrame flush, the _slotRenderCache
-// skip, renderRail) is unchanged — one message, one render flush, no extra churn.
+// skip, renderRail) is unchanged: one message, one render flush, no extra churn.
 function drawSlotInfoBatch(batch) {
 	if (window.pause) return;
 	if (!batch || !batch.frame || !Array.isArray(batch.slots)) return;
@@ -1134,7 +1134,7 @@ function showTab(_element) {
 }
 
 // doLog consumes the structured log event {timeString, level, category, message,
-// colour} from the Go server and prepends a single node + trims — no more
+// colour} from the Go server and prepends a single node + trims - no more
 // re-parsing the entire (up to 499-entry) list via innerHTML, and no ANSI parsing.
 function doLog(log) {
 	if (!log) return;
@@ -1195,7 +1195,7 @@ function escapeHTML(s) {
 }
 
 // showPortNotice (desktop only) tells the operator that the default port was in
-// use so Demeter bound an alternate one — the window itself works, but the URL
+// use so Demeter bound an alternate one - the window itself works, but the URL
 // for browser access changed. window.__demeterPortNotice is injected by the
 // desktop launcher (webview Init) only when the bound port differs from default.
 function showPortNotice(n) {
@@ -1378,7 +1378,7 @@ function doSlotEnable(_element) {
 		"slot": slot,
 		"enabled": _element.checked
 	});
-	// A disabled slot is excluded from the pending count — refresh now.
+	// A disabled slot is excluded from the pending count - refresh now.
 	renderRail();
 	updateApply(frame);
 }
@@ -1413,7 +1413,7 @@ function doFrameMode(_element) {
 	backend.send('scanFrame', { "ip": frame, "scan": scan });
 	backend.send('enableFrame', { "ip": frame, "enabled": enabled });
 	// Reflect the new mode locally so the Apply button (shown only in Scan-only
-	// mode) and the pending counts update immediately — frame-mode changes aren't
+	// mode) and the pending counts update immediately; frame-mode changes aren't
 	// broadcast back, so window.frames would otherwise stay stale until a re-scan.
 	const f = (window.frames || {})[frame];
 	if (f) { f.scan = scan; f.enabled = enabled; }

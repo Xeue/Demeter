@@ -8,11 +8,11 @@ import (
 	"github.com/Xeue/Demeter/rollcall"
 )
 
-// SEAM #1 — CLI addressing -> rollcall.Addr.
+// SEAM #1 - CLI addressing -> rollcall.Addr.
 //
 // Demeter addresses a target as `cmd@<net>:<addr>:<slot>` where <addr> is a hex
 // token (the frame's discovered unit address such as "12"/"30") and <slot> is a
-// hex token. The mapping is now CONFIRMED against captures (see
+// hex token. The mapping is confirmed against captures (see
 // docs/ROLLCALL_PROTOCOL.md): unit = (addr<<8)|slot, net = 0, port = 0. E.g.
 // @0000:12:05 -> 0x1205, direct-to-card @0000:30:00 -> 0x3000.
 //

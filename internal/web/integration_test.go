@@ -195,7 +195,7 @@ func TestCredentialsNoticeOnLoopback(t *testing.T) {
 
 // TestStageCardOverWS exercises the full pre-config path: add an (offline) frame,
 // stage a card on a slot, and confirm it shows up in the frames snapshot as a
-// staged slot — i.e. router -> manager -> actor -> state, end to end.
+// staged slot, i.e. router -> manager -> actor -> state, end to end.
 func TestStageCardOverWS(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Defaults()

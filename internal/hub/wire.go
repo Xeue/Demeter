@@ -60,7 +60,7 @@ type slotInfoItem struct {
 
 // slotInfoBatchMsg coalesces all of one frame's changed slots into a single
 // message (emitted when the frame finishes a scan), so a fleet-wide burst is one
-// message per frame instead of one per slot — the client re-expands the items
+// message per frame instead of one per slot. The client re-expands the items
 // into its normal per-slot render queue.
 type slotInfoBatchMsg struct {
 	Frame frameHeader    `json:"frame"`
@@ -74,7 +74,7 @@ func encode(command string, data any) []byte {
 }
 
 // marshalData returns the JSON of a payload's data only (used as the dedup hash
-// basis so a slot's content — not the envelope — decides whether it changed).
+// basis so a slot's content, not the envelope, decides whether it changed).
 func marshalData(v any) []byte {
 	b, _ := json.Marshal(v)
 	return b

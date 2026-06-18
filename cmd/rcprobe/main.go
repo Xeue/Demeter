@@ -1,18 +1,18 @@
 // Command rcprobe is a RollCall connectivity probe. It dials a frame and reports
 // exactly what it speaks, to diagnose "Cannot reach frame" / "connected but not
-// responding" against real hardware (docs/ROLLCALL_HANDOVER.md, Task 0).
+// responding" against real hardware (see docs/ROLLCALL_PROTOCOL.md, Further work).
 //
 // Built to be dead-simple on a remote Windows box:
 //   - double-click it (or run with no args) and it PROMPTS for the frame IP;
-//   - it writes a results .txt next to the .exe — just send me that file;
+//   - it writes a results .txt next to the .exe - just send me that file;
 //   - it tries the alternate port (2051) automatically if 2050 refuses;
 //   - it pauses at the end so the window doesn't disappear.
 //
 // Or with flags:  rcprobe -frame 10.40.128.10 [-port 2050] [-addr 12] [-slot 05]
 //
-// Read-only (GETs only) — safe against a live frame. The most important output is
+// Read-only (GETs only), safe against a live frame. The most important output is
 // PHASE 1: after the unconnected 0x15 login, the frame should announce its units
-// via 0x14 IDENT — those announcements reveal the real addressing.
+// via 0x14 IDENT - those announcements reveal the real addressing.
 package main
 
 import (
@@ -68,7 +68,7 @@ func main() {
 		out = io.MultiWriter(os.Stdout, f)
 	}
 
-	logf("rcprobe — RollCall connectivity probe")
+	logf("rcprobe - RollCall connectivity probe")
 	logf("results file: %s", resultsPath)
 	logf("==> When this finishes, SEND THE FILE ABOVE. <==")
 
@@ -77,25 +77,25 @@ func main() {
 
 	conn := dial(*frame, *port)
 	if conn == nil {
-		logf("\nRESULT: no TCP connection on any tried port — network/port/firewall, not protocol.")
+		logf("\nRESULT: no TCP connection on any tried port - network/port/firewall, not protocol.")
 		pauseIf(interactive)
 		os.Exit(1)
 	}
 	defer conn.Close()
 	go reader(conn)
 
-	phase("0", "passive listen 2s — does the frame send anything on connect (before any login)?")
+	phase("0", "passive listen 2s - does the frame send anything on connect (before any login)?")
 	time.Sleep(2 * time.Second)
 
-	phase("1", "UNCONNECTED login (0x15), then listen 3s — the frame should announce its units via 0x14 IDENT (this reveals the real addressing)")
+	phase("1", "UNCONNECTED login (0x15), then listen 3s - the frame should announce its units via 0x14 IDENT (this reveals the real addressing)")
 	send(conn, "LOGIN 0x15", login15())
 	time.Sleep(3 * time.Second)
 
-	phase("2", "UNCONNECTED GET 17044 at unit 0x0000 (Demeter's frame-address read — the FAILING one)")
+	phase("2", "UNCONNECTED GET 17044 at unit 0x0000 (Demeter's frame-address read - the FAILING one)")
 	send(conn, "GET frame", unconnectedGet(rollcall.UnitAddr(0x00, 0x00), self, 17044))
 	time.Sleep(*settle)
 
-	phase("3", "UNCONNECTED card-type (16530) SWEEP across controller addresses — find which one the frame answers on")
+	phase("3", "UNCONNECTED card-type (16530) SWEEP across controller addresses - find which one the frame answers on")
 	for _, a := range []uint8{0x00, 0x01, 0x02, 0x10, 0x12, 0x20, 0x30} {
 		u := rollcall.UnitAddr(a, 0x00)
 		send(conn, fmt.Sprintf("GET a=%02x", a), unconnectedGet(u, self, 16530))
@@ -117,11 +117,11 @@ func main() {
 		cUReplies.Load(), cReplies.Load(), cIdents.Load(), cNacks.Load(), cAcks.Load(), cOther.Load())
 	switch {
 	case cUReplies.Load() > 0:
-		logf("The frame ANSWERS UNCONNECTED reads — see which PHASE/address got the 0x0c reply; that's the addressing to use.")
+		logf("The frame ANSWERS UNCONNECTED reads - see which PHASE/address got the 0x0c reply; that's the addressing to use.")
 	case cIdents.Load() > 0:
-		logf("The frame announced units via IDENT (PHASE 1) but didn't answer the GETs — the IDENT src addresses show the real units to read.")
+		logf("The frame announced units via IDENT (PHASE 1) but didn't answer the GETs - the IDENT src addresses show the real units to read.")
 	case cReplies.Load() > 0:
-		logf("The frame answers CONNECTED reads (PHASE 5) but not unconnected — we may need connected mode + its addressing.")
+		logf("The frame answers CONNECTED reads (PHASE 5) but not unconnected - we may need connected mode + its addressing.")
 	default:
 		logf("The frame sent NOTHING back to login or any GET. Note the port, and whether anything appeared in PHASE 0/1.")
 	}

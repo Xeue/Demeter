@@ -3,7 +3,7 @@
 // Command demeter-desktop is the "Electron-style" build: it runs the full
 // Demeter web server on the configured address (default :8080, reachable by
 // other operators' browsers just like the headless server) AND opens it in a
-// native OS webview window (WebView2 on Windows, WebKit on macOS/Linux) — no
+// native OS webview window (WebView2 on Windows, WebKit on macOS/Linux), no
 // bundled Chromium. The window auto-logs-in over loopback.
 //
 // Build with the `desktop` tag and CGO enabled:
@@ -74,8 +74,8 @@ func main() {
 	}
 
 	// Serve on the configured address (default :8080) so other browsers can reach
-	// this instance — same as the headless server. If the port is already taken
-	// (e.g. another app on 8080), probe upward (8081, 8082, …) so the app still
+	// this instance, same as the headless server. If the port is already taken
+	// (e.g. another app on 8080), probe upward (8081, 8082, ...) so the app still
 	// starts instead of failing to bind / showing "page not found".
 	requested := cfg.ListenAddr
 	ln, err := web.Listen(requested)
@@ -106,10 +106,10 @@ func main() {
 	w.SetTitle("Demeter")
 	w.SetSize(1640, 1220, webview.HintNone)
 	// If the default port was taken and we landed on a different one, tell the
-	// page so it can pop up a notice (the window itself is fine — it points at the
-	// real port — but the user should know the URL changed for browser access).
+	// page so it can pop up a notice (the window itself is fine, it points at the
+	// real port, but the user should know the URL changed for browser access).
 	if reqPort != "" && reqPort != "0" && reqPort != actPort {
-		slog.Warn("default port in use — Demeter bound an alternate port", "requested", reqPort, "actual", actPort)
+		slog.Warn("default port in use, Demeter bound an alternate port", "requested", reqPort, "actual", actPort)
 		w.Init(fmt.Sprintf("window.__demeterPortNotice={requested:%q,actual:%q};", reqPort, actPort))
 	}
 	w.Navigate(url)

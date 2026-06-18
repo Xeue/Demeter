@@ -38,7 +38,7 @@ old Electron/TypeScript app has been removed from `main`; it is preserved on the
 - Tests: `go test -race ./...`
 
 **Versioning:** the single source of truth is the `VERSION` file at the repo
-root (Go-native — independent of the legacy npm `package.json`). The Makefile
+root (Go-native, independent of the legacy npm `package.json`). The Makefile
 stamps it into the binary (`-ldflags`) and into release artifact names (e.g.
 `demeter-v2.0.0-windows-amd64.exe`); a plain `go build` falls back to the
 embedded `VERSION` file, so the value is always correct. To release a new
@@ -50,7 +50,7 @@ the login page (so users can quote it when reporting issues) and via
 For a desktop-window experience without bundling Chromium, `cmd/demeter-desktop`
 runs the same server on a private loopback port and opens it in the OS-native
 webview (WebView2 on Windows, WebKit on macOS/Linux). It's the same Go binary
-family — no Rust/Tauri toolchain — and auto-logs-in over loopback so there's no
+family (no Rust/Tauri toolchain) and auto-logs-in over loopback so there's no
 login prompt.
 
 - Build (needs CGO + the system webview headers): `make desktop`.
@@ -60,7 +60,7 @@ login prompt.
 
 ### Release artifact naming
 Every target builds into `dist/v<version>/`, and all artifacts follow one
-scheme — `Demeter-v<version>-<platform>[.ext]` (version from the `VERSION`
+scheme: `Demeter-v<version>-<platform>[.ext]` (version from the `VERSION`
 file). Desktop builds carry a `desktop-` token so they never collide with the
 headless server on the same OS:
 
@@ -82,7 +82,7 @@ removes it.
 **Launching the desktop app without a terminal window:**
 - **Windows:** `make desktop-windows` builds with `-ldflags="-H windowsgui"`, so
   it opens only the webview window (no console). Logs still go to the log file.
-- **macOS:** `make desktop-macapp` produces a `.app` bundle — double-click it
+- **macOS:** `make desktop-macapp` produces a `.app` bundle - double-click it
   (or `open Demeter-v<version>-desktop-macos.app`) and Finder launches it with no
   Terminal. See `packaging/macos/Info.plist`.
 
@@ -94,6 +94,27 @@ For a non-technical operator with SSH access, build under `dist/v<version>/`, th
 Both create a `demeter` system user + hardened systemd service, store data in
 `/var/lib/demeter`, and print the URL + a generated admin login. See
 [packaging/linux/install.sh](packaging/linux/install.sh) and [packaging/deb/](packaging/deb/).
+
+**First login / admin password.** The generated admin password is saved to a
+root-only file on the server (in addition to being printed by the installer):
+```
+sudo cat /var/lib/demeter/INITIAL_ADMIN_PASSWORD
+```
+The server writes this on first run, so it's there regardless of install method.
+If the file is ever missing, the password is also in the service log:
+`sudo journalctl -u demeter | grep -i "ADMIN BOOTSTRAP"`. Log in (default user
+`admin`), change the password in the GUI, then `sudo rm` that file. To set/reset
+it from the shell at any time:
+```
+# script install:
+sudo /path/to/install.sh set-password           # prompts (or auto-generates)
+# either install (stop, set, start):
+sudo systemctl stop demeter
+sudo -u demeter demeter --create-admin admin:NEW_PASSWORD --data-dir /var/lib/demeter
+sudo systemctl start demeter
+```
+(The in-GUI "generated credentials" notice only appears to a loopback/desktop
+admin, never to a remote browser — so use the file or the journal above.)
 
 Run `make` (or `make list`) for the full target list.
 

@@ -1,7 +1,7 @@
 // Package frame implements the per-frame actor: one goroutine owns one frame's
 // state and is the only writer of it. Poll ticks AND operator edits arrive as
 // messages on a single channel, so a scan can never interleave with an edit or a
-// delete — the structural fix for the documented scan-loop race (memory note
+// delete - the structural fix for the documented scan-loop race (memory note
 // scan-loop-race) that the legacy app papered over with a `done` boolean.
 //
 // A scan is long (hundreds of round-trips), so it runs in a child goroutine on a
@@ -190,7 +190,7 @@ func (a *Actor) run(ctx context.Context) {
 			case scanResultMsg:
 				a.handleScanResult(ctx, v)
 			case applyConfig:
-				a.cancelScan() // settings changed -> abandon the in-flight scan
+				a.cancelScan() // settings changed; abandon the in-flight scan
 				a.frame.Number, a.frame.Name, a.frame.Group, a.frame.Type = v.number, v.name, v.group, v.typ
 				a.changed()
 			case setCommandMsg:
@@ -240,8 +240,8 @@ func (a *Actor) run(ctx context.Context) {
 }
 
 // handlePollNow is the operator "scan/blast now" (retry). If a scan is already
-// in flight it can't just be dropped like a routine tick — the operator wants a
-// fresh attempt — so we queue one to run the instant the current scan finishes.
+// in flight it can't just be dropped like a routine tick (the operator wants a
+// fresh attempt), so we queue one to run the instant the current scan finishes.
 func (a *Actor) handlePollNow(ctx context.Context) {
 	if a.inflight {
 		a.rescanQueued = true
@@ -251,7 +251,7 @@ func (a *Actor) handlePollNow(ctx context.Context) {
 }
 
 // handleApplyNow is the operator "Apply changes": a one-shot scan that force-
-// blasts the pending diff once (respecting per-slot Blast + per-setting enabled)
+// blasts the pending diff once (respecting per-slot Blast and per-setting enabled)
 // without flipping the frame into permanent Scan & blast.
 func (a *Actor) handleApplyNow(ctx context.Context) {
 	if a.inflight {
@@ -284,7 +284,7 @@ func (a *Actor) handlePoll(ctx context.Context, force bool) {
 
 func (a *Actor) handleScanResult(ctx context.Context, v scanResultMsg) {
 	if v.gen != a.gen {
-		return // superseded by a cancel/reconfigure -> discard
+		return // superseded by a cancel/reconfigure; discard
 	}
 	a.inflight = false
 	if a.scanCancel != nil {
@@ -331,7 +331,7 @@ func (a *Actor) maybeAutoReboot(ctx context.Context) {
 			continue
 		}
 		if last, ok := a.lastAutoReboot[slot]; ok && now.Sub(last) < cooldown {
-			continue // within cooldown — a reboot is already in progress
+			continue // within cooldown; a reboot is already in progress
 		}
 		a.lastAutoReboot[slot] = now
 		reasons := sl.RebootReasons
@@ -397,7 +397,7 @@ func (a *Actor) setEnable(v setEnableMsg) {
 // importFrame merges an imported frame's CONFIGURATION into this actor's frame.
 // It restores metadata, group assignment, auto-reboot, scanning, and per-slot
 // prefered overrides + staged/enabled, but deliberately never turns ON frame
-// blasting (a.frame.Enabled is left as-is) — importing config must not start
+// blasting (a.frame.Enabled is left as-is): importing config must not start
 // blasting live hardware. Runtime fields (active/IPs/offline) are left to the scan.
 func (a *Actor) importFrame(in *model.Frame) {
 	if in.Number != "" {

@@ -1,4 +1,4 @@
-/* backend-shim.js — provides window.backend.{send,on} over a reconnecting
+/* backend-shim.js - provides window.backend.{send,on} over a reconnecting
  * WebSocket, replicating the Electron preload bridge exactly so app.js is
  * otherwise unchanged. Replaces the (unused) commonWS.js.
  *
@@ -26,7 +26,7 @@
 			// flush anything queued before the socket opened
 			queue.forEach(m => ws.send(m));
 			queue = [];
-			// (re)sync full state on every (re)connect — late joiners + reconnects
+			// (re)sync full state on every (re)connect: late joiners + reconnects
 			if (!firstConnect) {
 				window.backend.send('getFrames');
 				window.backend.send('getGroups');

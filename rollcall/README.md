@@ -1,11 +1,11 @@
 # rollcall
 
-A native Go client for the Grass Valley / Snell **RollCall** protocol — a drop-in
+A native Go client for the Grass Valley / Snell **RollCall** protocol, a drop-in
 replacement for shelling out to the Windows-only `RollTrak.exe`.
 
 Import path: `github.com/Xeue/Demeter/rollcall`
 
-**Picking up driver dev?** Start with [`../docs/ROLLCALL_HANDOVER.md`](../docs/ROLLCALL_HANDOVER.md) — current status, prioritized tasks (incl. the gating hardware probe for push), invariants, and how to test.
+**Picking up driver dev?** See [`../docs/ROLLCALL_PROTOCOL.md`](../docs/ROLLCALL_PROTOCOL.md) for the protocol guide, current status, and the prioritised further-work list (including the gating hardware probe for push).
 
 This package is self-contained (its own `go.mod`) so it can be tested in isolation.
 To fold it into the single-module Go rewrite, delete `rollcall/go.mod`; the import
@@ -23,16 +23,13 @@ path stays the same.
 | Keepalive: re-OPEN ~10s, IDENTITY ~15s | **Observed** | periodic in capture; necessity for staying attached unconfirmed |
 | `Open` / ACK round-trip | **Implemented** | OPEN bytes match capture; ACK routed |
 | Reference client serialises requests (1 in-flight) | **Observed** | drives `DefaultMaxInFlight = 1` |
-| `cmd@<net>:<addr>:<slot>` → `Addr` mapping | **Solved** | `unit=(addr<<8)\|slot`, port 0 — `UnitAddr()`, `TestUnitAddr` |
+| `cmd@<net>:<addr>:<slot>` -> `Addr` mapping | **Solved** | `unit=(addr<<8)\|slot`, port 0, via `UnitAddr()`, `TestUnitAddr` |
 | Offline/absent-card signal | **Observed** | `0x00` NACK / timeout / `"No Unit Fitted"` |
 | "take"/commit semantics | **Assumed** | implemented as `Set(takeCmd, 1)`; confirm on first live write |
 
-See [`../docs/ROLLCALL_GAPS.md`](../docs/ROLLCALL_GAPS.md) for the prioritised
-open-questions/next-steps list.
-
-See [`../docs/ROLLCALL_PROTOCOL.md`](../docs/ROLLCALL_PROTOCOL.md) for the full
-reverse-engineering notes and [`../tools/rollcall-decode.py`](../tools/rollcall-decode.py)
-to decode further captures.
+See [`../docs/ROLLCALL_PROTOCOL.md`](../docs/ROLLCALL_PROTOCOL.md) for the protocol
+guide, the open-questions/further-work list, and
+[`../tools/rollcall-decode.py`](../tools/rollcall-decode.py) to decode further captures.
 
 ## Usage
 
@@ -86,11 +83,11 @@ tab-separated stdout. The Go equivalents map 1:1:
 | `rolltrak -a IP cmd@0000:addr:slot?` | `Client.Get(ctx, unit, cmd)` |
 | `rolltrak -a IP cmd@0000:addr:slot=val` | `Client.Set(ctx, unit, cmd, val)` |
 | `rolltrak -a IP take@...=1` | `Client.Take(ctx, unit, takeCmd)` |
-| `parseTrackData()` (col 5/6/7) | `Decode()` (CmdID / int / string) — gone, native |
+| `parseTrackData()` (col 5/6/7) | `Decode()` (CmdID / int / string), gone native |
 | one `rolltrak` process per command | one persistent `Client` per frame |
 
 The command IDs in `commandsDB.json` are used unchanged (e.g. 4101=IP, 4108=Mode,
-4128="UP", 38003=LLDP port) — they are the same IDs that appear on the wire.
+4128="UP", 38003=LLDP port); they are the same IDs that appear on the wire.
 
 ## Addressing (solved)
 
@@ -109,21 +106,21 @@ unit := rollcall.UnitAddr(0x12, 0x05) // card in slot 5 behind a frame (controll
 card := rollcall.UnitAddr(0x30, 0x00) // a card addressed on its own IP                        -> 0x3000
 ```
 
-Confirmed against capture: `@12:00`→`0x1200`, `@12:05`→`0x1205`, `@30:00`→`0x3000`.
+Confirmed against capture: `@12:00` -> `0x1200`, `@12:05` -> `0x1205`, `@30:00` -> `0x3000`.
 
 ## Confirm on first live run (no capture needed)
 
-- **Offline/absent card:** the wire signals are now known — `0x00` NACK
+- **Offline/absent card:** the wire signals are now known: `0x00` NACK
   (present-but-unreadable), a bare timeout (absent unit), and `"No Unit Fitted"` from the
   slot-type query. The reader still only resolves on REPLY today, so to avoid an offline
   param blocking to its context deadline, fail fast on a NACK once you've seen how it
   behaves under the connected session (the NACK carries no command id, so with
   `MaxInFlight=1` attribute it to the in-flight request).
 - **Keepalive:** OPEN re-sent ~10s / IDENTITY ~15s were *observed*; whether the frame
-  drops an idle connection without them is unconfirmed. `Open` is provided — drive it on a
+  drops an idle connection without them is unconfirmed. `Open` is provided, drive it on a
   ticker from the per-frame owner if needed.
 - **"take":** implemented as `Set(takeCmd, 1)`; confirm a real write applies (the take
-  *policy* — which commands need it — is already in Demeter's code).
+  *policy* (which commands need it) is already in Demeter's code).
 - **Value kinds:** only int/string seen; unknown kinds are surfaced as `KindUnknown`
   (not dropped) so a float/enum would show up rather than vanish.
 
