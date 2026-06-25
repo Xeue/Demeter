@@ -30,6 +30,7 @@ import (
 	"github.com/Xeue/Demeter/internal/scan"
 	"github.com/Xeue/Demeter/internal/store"
 	"github.com/Xeue/Demeter/internal/web"
+	"github.com/Xeue/Demeter/rollcall"
 )
 
 // App holds the constructed (but not yet running) server components.
@@ -111,6 +112,20 @@ func Build(ctx context.Context, cfg config.Config, workers int) (*App, error) {
 			PerGetTimeout: cfg.RollcallTimeout(),
 		}
 		slog.Info("rollcall connection", "mode", cfg.RollcallMode, "port", cfg.RollcallPort, "setOpcode", cfg.RollcallSetOpcode, "handshake", cfg.RollcallHandshake, "getTimeoutMs", cfg.RollcallTimeoutMs)
+		// ROLLCALL_WIRETRACE=<file> (or "1"/"stderr") dumps every RollCall frame
+		// Demeter sends/receives as hex, to diff against an rcprobe capture.
+		if wt := os.Getenv("ROLLCALL_WIRETRACE"); wt != "" {
+			w := os.Stderr
+			if wt != "1" && wt != "stderr" {
+				if f, err := os.OpenFile(wt, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err == nil {
+					w = f
+				} else {
+					slog.Warn("ROLLCALL_WIRETRACE: cannot open file, using stderr", "path", wt, "err", err)
+				}
+			}
+			rollcall.SetWireTrace(w)
+			slog.Warn("ROLLCALL_WIRETRACE enabled: dumping all RollCall frames", "to", wt)
+		}
 	}
 	mgr := manager.New(ctx, scanner, dialer, st, h, st.Frames(), st.Groups(), cfg.ScanInterval(), autoOpts)
 	mgr.SetIntervalPersister(func(seconds int) {

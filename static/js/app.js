@@ -38,12 +38,19 @@ document.addEventListener('DOMContentLoaded', () => {
 	// Fleet sidebar + apply flow.
 	// closest() so clicks on the inner text/badge of a rail item or section button work.
 	document.addEventListener('click', e => {
+		const push = e.target.closest('.pushBadge');
+		if (push) { e.stopPropagation(); openChangesPop(push.closest('.railItem').getAttribute('data-ip'), push); return; }
 		const item = e.target.closest('.railItem');
 		if (item) { selectFrame(item.getAttribute('data-ip')); return; }
 		const col = e.target.closest('.secCollapse');
 		if (col) { toggleSection(col.closest('.secHead'), false); return; }
 		const exp = e.target.closest('.secExpand');
 		if (exp) { toggleSection(exp.closest('.secHead'), true); return; }
+	});
+	// Keyboard activation for the sidebar push badge (role=button).
+	document.addEventListener('keydown', e => {
+		const push = (e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('.pushBadge');
+		if (push) { e.preventDefault(); openChangesPop(push.closest('.railItem').getAttribute('data-ip'), push); }
 	});
 	const _frameSearch = document.getElementById('frameSearch');
 	if (_frameSearch) _frameSearch.addEventListener('input', renderRail);
@@ -57,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	}
 	document.addEventListener('click', e => {
 		if (_settingsMenu && !_settingsMenu.classList.contains('d-none') && !_settingsMenu.contains(e.target) && e.target !== _settingsBtn) _settingsMenu.classList.add('d-none');
-		if (_changesPopEl && !_changesPopEl.contains(e.target) && !e.target.closest('.applyBtn')) closeChangesPop();
+		if (_changesPopEl && !_changesPopEl.contains(e.target) && !e.target.closest('.applyBtn, .pushBadge')) closeChangesPop();
 	});
 	on('click', '#clearLogs', () => { document.getElementById('logs').innerHTML = ''; });
 	on('change', '#logLevelFilter', applyLogFilter);
@@ -153,6 +160,21 @@ document.addEventListener('DOMContentLoaded', () => {
 		s = Math.min(3600, Math.max(1, s));
 		_scanInterval.value = s; // reflect clamping
 		backend.send('setScanInterval', { seconds: s });
+	});
+
+	/* DEBUG (temporary): rolltrak command hint - click the >_ icon to reveal the
+	   command inline as selectable text (pre-selected so you can just copy it). */
+	on('click', '.rolltrakDbg', (el) => {
+		const cont = el.closest('.commandCont');
+		const existing = cont.querySelector('.rolltrakOut');
+		if (existing) { existing.remove(); el.classList.remove('open'); return; } // toggle off
+		const out = document.createElement('pre');
+		out.className = 'rolltrakOut';
+		out.textContent = rolltrakForRow(cont);
+		cont.append(out);
+		el.classList.add('open');
+		const r = document.createRange(); r.selectNodeContents(out);
+		const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); // pre-select for copy
 	});
 
 	/* Group controls */
@@ -291,10 +313,13 @@ function renderRail() {
 		const _it = document.createElement('div');
 		_it.className = 'railItem' + (ip === window.selectedFrame ? ' active' : '');
 		_it.setAttribute('data-ip', ip);
-		const badge = pend > 0 ? `<span class="rt count warn">${pend}</span>` : `<span class="rt count ok">0</span>`;
+		const badge = pend > 0
+			? `<span class="rt count warn pushBadge" role="button" tabindex="0" title="Show & apply ${pend} pending change(s)">${pend}</span>`
+			: `<span class="rt count ok">0</span>`;
+		const grp = f.group ? `<span class="grp" title="Group">${escapeHTML(f.group)}</span>` : '';
 		_it.innerHTML = `<span class="sq ${f.offline ? 'off' : 'ok'}"></span>` +
-			`<div><div class="nm">F${escapeHTML(f.number || '')} · ${escapeHTML(f.name || '')}</div>` +
-			`<div class="ip">${escapeHTML(ip)}</div></div>${badge}`;
+			`<div class="railMeta"><div class="nm">F${escapeHTML(f.number || '')} · ${escapeHTML(f.name || '')}</div>` +
+			`<div class="ip">${escapeHTML(ip)}${grp}</div></div>${badge}`;
 		_list.append(_it);
 	}
 	const _sum = document.getElementById('railSummary');
@@ -348,6 +373,89 @@ function commandTarget(prefered, enabled, computed) {
 	return null;
 }
 
+// hasComputed reports whether a group-computed target is present. 0 is a REAL
+// value (e.g. Spigot Shuffling "Pass-through" = option key 0), so a bare
+// truthiness test wrongly hides it - guard on null/empty instead.
+function hasComputed(v) { return v !== null && v !== undefined && v !== ''; }
+
+// targetMatches reports whether the device's current value already equals the
+// target the scanner would write (calm green vs amber). It mirrors the backend,
+// including the shuffle case: a shuffle command reports its current value as a
+// label ("Pass-through") while the group/override target is the option KEY, so
+// compare by mapping the key to its option label.
+function targetMatches(active, target, command) {
+	if (command && command.shuffle) {
+		const lbl = command.options ? command.options[target] : target;
+		return String(active) === String(lbl);
+	}
+	return looseEqual(active, target, command ? command.type : undefined);
+}
+
+// ---- DEBUG (temporary): rolltrak command hint -------------------------------
+// Mirrors the legacy blast (main.ts doCommands): FRAME commands go to the frame
+// IP at 0000:<addr>:<slot>; CARD commands (everything else) go DIRECT to the
+// card's own IP at 0000:30:00; shuffles use the 8500/8501 pair. Drives the
+// hover/copy icon at the end of each frame command row, to cross-check the wire.
+const ROLLTRAK_FRAME_CMDS = new Set([4101, 4103, 4105, 4108, 4201, 4203, 4205, 4208]);
+
+function cardIPofSlot(sl) {
+	if (!sl) return null;
+	if (sl.ipaup === 'UP' && sl.ipa) return sl.ipa;
+	if (sl.ipbup === 'UP' && sl.ipb) return sl.ipb;
+	return sl.ipa || sl.ipb || null;
+}
+
+// rolltrakTargetRaw returns the raw value Demeter would write (option KEY for
+// selects, 0/1 for booleans): an enabled override else the group value, or null.
+function rolltrakTargetRaw(_cont) {
+	const type = _cont.getAttribute('data-type');
+	const ov = _cont.querySelector('.commandEnabled');
+	if (ov && ov.checked) {
+		let v = '';
+		if (type === 'boolean') { const i = _cont.querySelector('.commandInput'); v = i && i.checked ? '1' : '0'; }
+		else if (type === 'smartip') v = Array.from(_cont.querySelectorAll('.octet')).map(o => o.value).join('.');
+		else if (type === 'select') { const s = _cont.querySelector('select.commandInput'); v = s ? s.value : ''; }
+		else { const i = _cont.querySelector('.commandInput'); v = i ? i.value : ''; }
+		if (v !== '' && v != null) return v;
+	}
+	const comp = _cont.getAttribute('data-computed');
+	return (comp !== '' && comp != null) ? comp : null;
+}
+
+// rolltrakForRow builds the rolltrak command(s) Demeter would send for a row.
+function rolltrakForRow(_cont) {
+	if (!_cont) return '';
+	const cmd = _cont.getAttribute('data-command');
+	let take = _cont.getAttribute('data-take');
+	if (take === 'undefined' || take === '0' || take === null) take = '';
+	const type = _cont.getAttribute('data-type');
+	const shuffle = _cont.getAttribute('data-shuffle') === '1';
+	const raw = rolltrakTargetRaw(_cont);
+	const _f = _cont.closest('.frameCont'); const ip = _f ? _f.getAttribute('data-ip') : '';
+	const _s = _cont.closest('.slotCont'); const slot = _s ? _s.getAttribute('data-slot') : '';
+	const f = (window.frames || {})[ip] || {};
+	const sl = (f.slots || {})[slot] || {};
+	if (raw == null) return `${cmd}: no target set — Demeter would send nothing (row not managed or empty).`;
+	const cmdNum = Number(cmd);
+	const valFmt = (type === 'text' || type === 'smartip') ? `"${raw}"` : raw;
+
+	if (ROLLTRAK_FRAME_CMDS.has(cmdNum)) {
+		const addr = f.address || '<addr>';
+		const slotHex = (Number(slot) || 0).toString(16).padStart(2, '0');
+		let s = `rolltrak -a ${ip} ${cmd}@0000:${addr}:${slotHex}=${valFmt}`;
+		if (take) s += `\nrolltrak -a ${ip} ${take}@0000:${addr}:${slotHex}=1`;
+		return s + `\n(frame command → frame ${ip})`;
+	}
+	const cardIP = cardIPofSlot(sl) || '<cardIP>';
+	if (shuffle || (cmdNum >= 50265 && (cmdNum - 50265) % 300 === 0 && (cmdNum - 50265) / 300 < 16)) {
+		const spigot = (cmdNum - 50265) / 300;
+		return `rolltrak -a ${cardIP} 8500@0000:30:00=${spigot} 8501@0000:30:00=${raw}\n(shuffle → card ${cardIP})`;
+	}
+	let s = `rolltrak -a ${cardIP} ${cmd}@0000:30:00=${valFmt}`;
+	if (take) s += `\nrolltrak -a ${cardIP} ${take}@0000:30:00=1`;
+	return s + `\n(card command → card ${cardIP} @ 30:00)`;
+}
+
 // isPending: a row counts as a pending write only when it is red (differs from a
 // real target) AND managed: an override that actually carries a value, or a
 // group target (a bare checked-but-empty override is NOT pending, matching the
@@ -361,17 +469,17 @@ function isPending(_c) {
 	return ovHasValue || (grp && grp.textContent.trim() !== '');
 }
 
-// updateApply shows the "Apply changes [N]" button when a frame is in Scan-only
-// mode with pending changes, and refreshes its count.
+// updateApply shows the "Apply changes [N]" button whenever a frame has pending
+// changes, in ANY mode — in Scan-only it's the only way settings get written, and
+// in Scan & blast it's a manual re-send to recover commands that stalled (the
+// background loop normally drives this to 0). Hidden only when nothing is pending.
 function updateApply(ip) {
 	const _f = document.querySelector(`#frameDetail .frameCont[data-ip="${attrSel(ip)}"]`);
 	if (!_f) return;
-	const f = (window.frames || {})[ip] || {};
-	const scanOnly = f.scan && !f.enabled;
 	const pend = framePending(ip);
 	const _ab = _f.querySelector('.applyBtn');
 	if (_ab) {
-		_ab.classList.toggle('d-none', !(scanOnly && pend > 0));
+		_ab.classList.toggle('d-none', !(pend > 0));
 		const _num = _ab.querySelector('.num');
 		if (_num) _num.textContent = pend + ' ▾';
 	}
@@ -414,9 +522,15 @@ function recomputeRow(_cont) {
 	const current = _read.getAttribute('data-raw');
 	const type = _cont.getAttribute('data-type');
 	let target;
+	const shuffle = _cont.getAttribute('data-shuffle') === '1';
 	if (type === 'boolean') { const i = _cont.querySelector('.commandInput'); target = i && i.checked ? '1' : '0'; }
 	else if (type === 'smartip') target = Array.from(_cont.querySelectorAll('.octet')).map(o => o.value).join('.');
-	else if (type === 'select') { const s = _cont.querySelector('select.commandInput'); target = s ? s.value : ''; }
+	else if (type === 'select') {
+		const s = _cont.querySelector('select.commandInput');
+		// Shuffle rows report `current` as a label, so compare against the selected
+		// option's label (text), not its key; plain selects compare key-to-key.
+		target = s ? (shuffle ? (s.options[s.selectedIndex] ? s.options[s.selectedIndex].text : '') : s.value) : '';
+	}
 	else { const i = _cont.querySelector('.commandInput'); target = i ? i.value : ''; }
 	_read.classList.remove('bg-success', 'bg-danger');
 	if (current === null || current === undefined || current === '') return;
@@ -490,8 +604,13 @@ function openChangesPop(ip, anchor) {
 	document.body.append(el);
 	_changesPopEl = el;
 	const r = anchor.getBoundingClientRect();
+	// Anchor under the trigger, left-aligned, but clamp so it never runs off-screen
+	// (the trigger can be the right-side Apply button or a left-sidebar badge).
+	const popW = el.offsetWidth || 540;
+	let left = r.left;
+	if (left + popW > window.innerWidth - 8) left = Math.max(8, window.innerWidth - 8 - popW);
 	el.style.top = (r.bottom + 6) + 'px';
-	el.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+	el.style.left = left + 'px';
 	el.querySelector('.x').onclick = closeChangesPop;
 	el.querySelector('.xCancel').onclick = closeChangesPop;
 	el.querySelector('.doApply').onclick = () => { backend.send('applyFrame', { ip: ip }); closeChangesPop(); };
@@ -506,24 +625,25 @@ function drawFrame(frame) {
 	const opt = (v, l) => `<option value="${v}" ${mode === v ? 'selected' : ''}>${l}</option>`;
 	const slotOpts = Array.from({ length: 20 }, (_, i) => { const s = String(i + 1).padStart(2, '0'); return `<option value="${s}">Slot ${s}</option>`; }).join('');
 	const _header = `<header>
-		<div class="me-2">
-			<div class="frameName">F${escapeHTML(frame.number || '')} · ${escapeHTML(frame.name || '')}</div>
-			<div class="labelGroup mono">${escapeHTML(frame.ip)}${frame.group ? ' · ' + escapeHTML(frame.group) : ''}</div>
+		<div class="frameHeadMain">
+			<div class="frameTitle me-auto">
+				<div class="frameName">F${escapeHTML(frame.number || '')} · ${escapeHTML(frame.name || '')}</div>
+				<div class="labelGroup mono">${escapeHTML(frame.ip)}${frame.group ? ' · ' + escapeHTML(frame.group) : ''}</div>
+			</div>
+			<input type="checkbox" class="form-check-input frameEnable d-none" ${frame.enabled ? 'checked' : ''}>
+			<input type="checkbox" class="form-check-input frameScan d-none" ${frame.scan ? 'checked' : ''}>
+			<span class="applyBtn d-none ms-1"><button class="go" title="Send the pending changes now — in Scan-only this is the only write; in Scan &amp; blast it re-pushes commands that stalled. Does not change the frame's mode.">Apply changes</button><button class="num" title="Review what will change">0 ▾</button></span>
+			<select class="frameScanMode form-select form-select-sm w-auto ms-1">${opt('ignore', 'Ignore')}${opt('scan', 'Scan only')}${opt('blast', 'Scan & blast')}</select>
+			<select class="frameAutoReboot form-select form-select-sm w-auto ms-1" title="Auto-reboot a card after an IP/mode change (needs a reboot to apply)">
+				<option value="" ${!frame.autoReboot ? 'selected' : ''}>Auto-reboot: default</option>
+				<option value="on" ${frame.autoReboot === 'on' ? 'selected' : ''}>On</option>
+				<option value="off" ${frame.autoReboot === 'off' ? 'selected' : ''}>Off</option>
+			</select>
+			<select class="addCardSlot form-select form-select-sm w-auto ms-1" title="Pre-configure a card before it is online">${slotOpts}</select>
+			<button class="addCardBtn btn btn-outline-primary btn-sm ms-1" title="Stage this slot so its settings apply when the card comes online">Add card</button>
+			<button class="frameDelete btn btn-danger btn-sm ms-1">Delete</button>
 		</div>
-		<input type="checkbox" class="form-check-input frameEnable d-none" ${frame.enabled ? 'checked' : ''}>
-		<input type="checkbox" class="form-check-input frameScan d-none" ${frame.scan ? 'checked' : ''}>
-		<div class="frameError"></div>
-		<div class="frameStatus ms-auto"></div>
-		<span class="applyBtn d-none ms-1"><button class="go" title="Apply pending changes once (does not enable continuous blasting)">Apply changes</button><button class="num" title="Review what will change">0 ▾</button></span>
-		<select class="frameScanMode form-select form-select-sm w-auto ms-1">${opt('ignore', 'Ignore')}${opt('scan', 'Scan only')}${opt('blast', 'Scan & blast')}</select>
-		<select class="frameAutoReboot form-select form-select-sm w-auto ms-1" title="Auto-reboot a card after an IP/mode change (needs a reboot to apply)">
-			<option value="" ${!frame.autoReboot ? 'selected' : ''}>Auto-reboot: default</option>
-			<option value="on" ${frame.autoReboot === 'on' ? 'selected' : ''}>On</option>
-			<option value="off" ${frame.autoReboot === 'off' ? 'selected' : ''}>Off</option>
-		</select>
-		<select class="addCardSlot form-select form-select-sm w-auto ms-1" title="Pre-configure a card before it is online">${slotOpts}</select>
-		<button class="addCardBtn btn btn-outline-primary btn-sm ms-1" title="Stage this slot so its settings apply when the card comes online">Add card</button>
-		<button class="frameDelete btn btn-danger btn-sm ms-1">Delete</button>
+		<div class="frameHeadStatus"><div class="frameError"></div><div class="frameStatus"></div></div>
 	</header>`;
 	_frameCont.insertAdjacentHTML('beforeend', _header);
 	_frameCont.insertAdjacentHTML('beforeend', `<section class="data"></section>`);
@@ -599,7 +719,15 @@ function applySlotInfo(slotInfo) {
 			_slotCont.classList.add('groupCont');
 			_slotCont.setAttribute('data-slot', slotName);
 			if (slot.offline) _slotCont.classList.add('offline');
-			_frameData.appendChild(_slotCont);
+			// Insert in numeric slot order (Slot 02 before Slot 10), not arrival
+			// order, so slots that scan in a different order still display sorted.
+			const _slotNum = parseInt(slotName, 10);
+			let _before = null;
+			for (const _ex of _frameData.querySelectorAll(':scope > .slotCont')) {
+				const n = parseInt(_ex.getAttribute('data-slot'), 10);
+				if (!isNaN(n) && n > _slotNum) { _before = _ex; break; }
+			}
+			_frameData.insertBefore(_slotCont, _before); // null -> append at end
 			_slotCont.insertAdjacentHTML('beforeend', `<header>
 				<input type="checkbox" class="form-check-input collapseHeader slotCollapse" id="slot_${frameIP.replaceAll('.','_')}_${slotName}" checked>
 				<label class="groupName slotTitle" for="slot_${frameIP.replaceAll('.','_')}_${slotName}">Slot ${slotName}</label>
@@ -844,6 +972,8 @@ function drawCommand(prefix, command, commandID, editValue = null, readValue = n
 	_cont.setAttribute('data-increment', command.increment || '');
 	_cont.setAttribute('data-options', opts);
 	_cont.setAttribute('data-depends', deps);
+	_cont.setAttribute('data-shuffle', command.shuffle ? '1' : '');
+	_cont.setAttribute('data-computed', hasComputed(computed) ? computed : ''); // raw group value (for the rolltrak debug hint)
 	try {
 		if (editValue !== null) {
 			_cont.insertAdjacentHTML('beforeend', `<div class="form-switch"><input type="checkbox" class="${prefix}_commandEnabled commandEnabled form-check-input" ${editValue.enabled ? 'checked': ''}></div>`);
@@ -872,14 +1002,14 @@ function drawCommand(prefix, command, commandID, editValue = null, readValue = n
 				// never against command.default. (editValue is the override object.)
 				const enabled = editValue !== null && editValue.enabled;
 				const target = commandTarget(editValue, enabled, computed);
-				if (target !== null) match = looseEqual(readValue, target, command.type) ? 'bg-success' : 'bg-danger';
+				if (target !== null) match = targetMatches(readValue, target, command) ? 'bg-success' : 'bg-danger';
 			}
 			_cont.insertAdjacentHTML('beforeend', `<div class="commandRead form-control form-control-sm w-75 ${match}" data-raw="${readValue}">${val}</div>`);
 		} else {
 			_cont.insertAdjacentHTML('beforeend', `<div class="commandRead" data-raw=""></div>`);
 		}
 
-		if (computed) {
+		if (hasComputed(computed)) {
 			let val = computed;
 			switch (command.type) {
 				case 'boolean':
@@ -964,6 +1094,10 @@ function drawCommand(prefix, command, commandID, editValue = null, readValue = n
 		_input.classList.add(`${prefix}_commandInput`, 'commandInput');
 		_input.addEventListener('change', () => checkDeps(_input));
 		_cont.append(_input);
+		// DEBUG (temporary): hover shows the exact rolltrak command Demeter would
+		// send for this row; click copies it. Frame rows only. Remove this line +
+		// the rolltrak* helpers + the .rolltrakDbg handlers/CSS to take it out.
+		if (prefix === 'frame') _cont.insertAdjacentHTML('beforeend', `<span class="rolltrakDbg" title="click to show the rolltrak command">&gt;_</span>`);
 		return _cont;
 	} catch (error) {
 		console.log(error)
@@ -973,6 +1107,7 @@ function drawCommand(prefix, command, commandID, editValue = null, readValue = n
 function updateCommand(_command, command, prefered = null, active, computed = null) {
 	try {
 		// if (command.command == 4052) console.log(command, prefered, active)
+		_command.setAttribute('data-computed', hasComputed(computed) ? computed : ''); // keep group value fresh for the rolltrak hint
 		const _read = _command.querySelector('.commandRead');
 		if (_read) _read.setAttribute('data-raw', active); // keep current value fresh for instant edit feedback
 		switch (command.type) {
@@ -1003,12 +1138,12 @@ function updateCommand(_command, command, prefered = null, active, computed = nu
 			// pending for a value the scanner will never write.
 			const target = commandTarget(prefered, enabled, computed);
 			if (target !== null && active !== undefined && active !== null && active !== '') {
-				_read.classList.add(looseEqual(active, target, command.type) ? 'bg-success' : 'bg-danger');
+				_read.classList.add(targetMatches(active, target, command) ? 'bg-success' : 'bg-danger');
 			}
 		}
 
 		const _computed = _command.querySelector('.commandComputed');
-		if (computed) {
+		if (hasComputed(computed)) {
 			_computed.classList.add('form-control','form-control-sm','w-75');
 			switch (command.type) {
 				case 'boolean':
@@ -1629,7 +1764,7 @@ function buildIOTree(container, data, checked) {
 		container.insertAdjacentHTML('beforeend',
 			`<label class="ioRow ioFrame"><input type="checkbox" class="form-check-input ioFrameChk" data-frame="${escAttr(ip)}" data-group-of="${escAttr(f.group || '')}" ${checked ? 'checked' : ''}> <span>F${escapeHTML(f.number || '')} ${escapeHTML(f.name || '')} <span class="text-muted">(${escapeHTML(ip)})</span>${groupTag}</span></label>`);
 		const slots = f.slots || {};
-		for (const slotName of Object.keys(slots).sort()) {
+		for (const slotName of Object.keys(slots).sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0) || a.localeCompare(b))) {
 			const staged = slots[slotName] && slots[slotName].staged ? ' <span class="badge bg-secondary">expected</span>' : '';
 			container.insertAdjacentHTML('beforeend',
 				`<label class="ioRow ioSlot"><input type="checkbox" class="form-check-input ioSlotChk" data-frame="${escAttr(ip)}" data-slot="${escAttr(slotName)}" ${checked ? 'checked' : ''}> <span>Slot ${escapeHTML(slotName)}${staged}</span></label>`);

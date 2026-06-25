@@ -101,8 +101,9 @@ byte 2..  : command id   (uint32 connected, uint16 unconnected) for data ops
 | `0x01` | ACK | connected | S to C | acknowledges an OPEN |
 | `0x14` | IDENTITY_UNIT | both | S to C | unit announces its name |
 | `0x21` | IDENTITY_SELF | connected | C to S | client announces its name |
-| `0x0b` | request | unconnected | C to S | read (and, best-guess, write) |
-| `0x0c` | reply | unconnected | S to C | current value |
+| `0x0b` | request | unconnected | C to S | read a parameter |
+| `0x0c` | reply | unconnected | S to C | current value (answers a read or a write) |
+| `0x10` | write | unconnected | C to S | write a parameter (confirmed from a rolltrak capture) |
 | `0x15` | login | unconnected | C to S | broadcast login |
 | `0x00` | NACK | unconnected | S to C | error; no command id |
 
@@ -134,10 +135,15 @@ detectable instead of looking like "no value".
 
 ## Take / commit
 
-Some writes need a follow-up "take" to apply. `Client.Take(unit, takeCmd)` is
-`Set(takeCmd, 1)`. Which commands need a take is policy that already lives in
-Demeter's command DB. In captures SETs applied directly without a take; confirm
-the take path on the first real write.
+Some writes are only staged by the SET and go ACTIVE on a follow-up "take".
+`Client.Take(unit, takeCmd)` is `Set(takeCmd, 1)`. Which commands need a take is
+policy in Demeter's command DB. Because a staged value's SET echo confirms
+nothing, the blast path (`scan.doCommands`) verifies take-required settings by
+**reading them back after the take**: stage all SETs, fire the take(s), then GET
+each command and compare to the intended value. A value that did not go active
+(take rejected, or ran but didn't commit) is flagged in `slot.Failed` with a
+reason rather than being falsely reported applied. Commands with no take keep the
+immediate SET-echo check.
 
 ## Worked examples
 
@@ -187,13 +193,17 @@ Confirmed (capture and/or hardware):
 - Addressing `unit=(addr<<8)|slot`, port 0 (second capture).
 - Unconnected reads, including the int-with-no-reserved layout and the "No Unit
   Fitted" status.
+- The unconnected integer WRITE: opcode `0x10` (`OpUSet`), body
+  `cmd(u16) | dataType(u16) | value`. Captured from rolltrak (the legacy
+  known-good writer) and pinned byte-for-byte (`TestUnconnectedSetBytesMatchCapture`).
 - The connected-mode persistent client and reply routing (in-memory tests).
 
 Open (see Further work):
 
-- The unconnected SET opcode. No write was ever captured. The value body is
-  grounded (it mirrors the captured `0x0c` reply), but the opcode is a best
-  guess (`0x0b`), configurable via `RollcallSetOpcode`.
+- The unconnected STRING/IP write. The opcode (`0x10`) is confirmed; the string
+  body is assumed to mirror the read's `dataType(u16) | reserved(u32) | ASCII`
+  layout but has not been captured. Confirm with `rcprobe -capture` on a string
+  param (e.g. an IP) if a frame rejects it.
 - The offline wire signal. A `0x00` NACK and the "No Unit Fitted" string were
   observed, but `offline.go` still infers offline from the per-GET timeout.
 - Connected-mode connect handshake and per-unit OPEN + keepalive. The login is
@@ -217,9 +227,11 @@ Confirm on a non-air frame, ideally with a second controller making changes:
 1. Which managed params push an unsolicited `0x47`+flag-`0x80` (IP 4101, link/IO
    4108/4128, a shuffle/route), and whether the direct-to-card unit (`0x3000`)
    also pushes. `cmd/rcprobe` (`make probe`) dials a frame and logs notifies.
-2. The unconnected SET opcode: set a param while sniffing TCP/2050 and match the
-   bytes, or try candidates against the frame and let the blast verify-and-retry
-   report which one applies.
+2. (DONE 2026-06-18) The unconnected SET opcode was `0x10`, not `0x0b`; fixed and
+   pinned. The `rcprobe -capture -frame <ip>` transparent proxy that cracked it
+   stays useful: point the legacy known-good writer at it
+   (`rolltrak -a <thisHost> <cmd>@0000:<addr>:<slot>=<value>`) to capture any
+   still-unconfirmed write (e.g. a STRING/IP param) byte-for-byte without Wireshark.
 3. Whether connected mode needs the IDENTITY login and per-unit OPEN before GETs
    are answered, and the OPEN cadence that keeps notifies flowing.
 

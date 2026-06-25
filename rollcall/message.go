@@ -32,8 +32,9 @@ const (
 // completeness / a possible alternative transport - see docs/ROLLCALL_PROTOCOL.md.
 const (
 	OpNack   Opcode = 0x00 // negative ack / error (carries no command id)
-	OpUReq   Opcode = 0x0b // unconnected request
+	OpUReq   Opcode = 0x0b // unconnected request (read)
 	OpUReply Opcode = 0x0c // unconnected reply
+	OpUSet   Opcode = 0x10 // unconnected write (confirmed via rolltrak capture, 2026-06-18)
 	OpLogin  Opcode = 0x15 // unconnected broadcast login
 )
 
@@ -55,6 +56,8 @@ func (o Opcode) String() string {
 		return "GET"
 	case OpSet:
 		return "SET"
+	case OpUSet:
+		return "USET"
 	case OpReply:
 		return "REPLY"
 	default:
@@ -67,8 +70,9 @@ func (o Opcode) String() string {
 func (o Opcode) connectedData() bool { return o == OpGet || o == OpSet || o == OpReply }
 
 // unconnectedData reports whether the opcode is an unconnected-mode data op
-// (uint16 command id + uint16 dataType): request/reply.
-func (o Opcode) unconnectedData() bool { return o == OpUReq || o == OpUReply }
+// (uint16 command id + uint16 dataType): request/reply/write. The write (OpUSet)
+// shares the request/reply body layout, so decoding it populates CmdID/Value.
+func (o Opcode) unconnectedData() bool { return o == OpUReq || o == OpUReply || o == OpUSet }
 
 // Addr is a RollCall logical address: net.unit.port, three big-endian uint16s.
 //

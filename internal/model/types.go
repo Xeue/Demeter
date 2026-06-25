@@ -23,6 +23,10 @@ type Frame struct {
 	// AutoReboot is the per-frame override of the global auto-reboot default:
 	// "" = inherit, "on" = force on, "off" = force off.
 	AutoReboot string `json:"autoReboot,omitempty"`
+	// Address is the frame's RollCall controller address (hex token, e.g. "12"),
+	// learned each scan via getFrameAddress. Surfaced to the GUI for the rolltrak
+	// debug hint; "" until the frame has been reached.
+	Address string `json:"address,omitempty"`
 }
 
 // Slot mirrors the legacy Slot type (main.ts ~102). The prefered/active/group

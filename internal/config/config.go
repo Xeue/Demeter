@@ -36,7 +36,7 @@ type Config struct {
 	RollcallPort      int    `json:"rollcallPort"`      // TCP port; 0 => 2050
 	RollcallHandshake bool   `json:"rollcallHandshake"` // connected mode only: send the IDENTITY handshake on connect
 	RollcallTimeoutMs int    `json:"rollcallTimeoutMs"` // per-GET timeout (ms); 0 => 2000. Raise for slow/busy frames
-	RollcallSetOpcode string `json:"rollcallSetOpcode"` // unconnected-mode SET opcode, hex (e.g. "0b" default, "0d"). Best-guess write - try alternatives if blasting won't apply
+	RollcallSetOpcode string `json:"rollcallSetOpcode"` // unconnected-mode SET opcode, hex; "" => 0x10 (confirmed via rolltrak capture). Override only for a frame that wants a different code
 
 	// Not persisted (set from flags/env).
 	DataDir string `json:"-"`

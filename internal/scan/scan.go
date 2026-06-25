@@ -128,6 +128,7 @@ func (s *Scanner) CheckFrame(ctx context.Context, frame *model.Frame, groups mod
 		return
 	}
 	frame.Offline = false
+	frame.Address = address // surfaced to the GUI (rolltrak debug hint)
 
 	// Slot discovery: 16530..16549 (main.ts:490-493).
 	discCmds := make([]uint32, 0, 20)

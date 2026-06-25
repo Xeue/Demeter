@@ -28,13 +28,13 @@ func ParseMode(s string) rollcall.Mode {
 	return rollcall.Unconnected
 }
 
-// ParseSetOpcode maps a hex string (e.g. "0b", "0d") to the unconnected-mode SET
-// opcode, defaulting to the best guess (0x0b) for an empty/invalid value.
+// ParseSetOpcode maps a hex string (e.g. "10", "0d") to the unconnected-mode SET
+// opcode, defaulting to the confirmed 0x10 (OpUSet) for an empty/invalid value.
 func ParseSetOpcode(s string) rollcall.Opcode {
 	if v, err := strconv.ParseUint(strings.TrimSpace(strings.TrimPrefix(s, "0x")), 16, 8); err == nil && v != 0 {
 		return rollcall.Opcode(v)
 	}
-	return rollcall.OpUReq
+	return rollcall.OpUSet
 }
 
 // RollcallDialer opens real RollCall connections (one persistent client per
@@ -43,7 +43,7 @@ type RollcallDialer struct {
 	// Mode selects the RollCall dialect (default Connected, the zero value).
 	// app.go sets this from config (default Unconnected).
 	Mode rollcall.Mode
-	// SetOpcode overrides the unconnected-mode SET opcode (0 -> default 0x0b).
+	// SetOpcode overrides the unconnected-mode SET opcode (0 -> default 0x10).
 	SetOpcode rollcall.Opcode
 	// Port overrides the RollCall TCP port (0 -> rollcall.DefaultPort).
 	Port int
@@ -174,7 +174,17 @@ func (d *rollcallDevice) Set(ctx context.Context, addr, slot string, cmd uint32,
 	if err != nil {
 		return model.None(), err
 	}
-	echo, err := d.c.Set(ctx, unit, cmd, toRollcall(v))
+	// Bound the SET like a GET: the frame echoes a 0x0c reply to a write (as it
+	// does to a read), but if a particular param or frame doesn't, this keeps a
+	// missing echo from stalling the blast - the value still lands and the poll
+	// loop reconciles it on the next read.
+	cctx := ctx
+	if d.perGetTimeout > 0 {
+		var cancel context.CancelFunc
+		cctx, cancel = context.WithTimeout(ctx, d.perGetTimeout)
+		defer cancel()
+	}
+	echo, err := d.c.Set(cctx, unit, cmd, toRollcall(v))
 	if err != nil {
 		return model.None(), err
 	}

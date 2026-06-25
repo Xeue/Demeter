@@ -4,11 +4,14 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -101,9 +104,8 @@ func WithSelf(a Addr) Option { return func(c *config) { c.self = a; c.selfSet = 
 func WithMode(m Mode) Option { return func(c *config) { c.mode = m } }
 
 // WithUnconnectedSetOpcode overrides the opcode used for an unconnected-mode SET.
-// No unconnected write was ever captured, so the default (OpUReq, 0x0b - the read
-// request opcode reused with a value body) is a best guess; set this to try
-// another candidate (e.g. 0x0d) against a non-air frame without a rebuild.
+// The default (OpUSet, 0x10) is confirmed from a rolltrak write capture; this
+// override exists only as an escape hatch for a frame that wants a different code.
 func WithUnconnectedSetOpcode(op Opcode) Option { return func(c *config) { c.usetOp = op } }
 
 // WithNotifyBuffer sets the buffer size of the Notify channel (default 64).
@@ -127,7 +129,7 @@ func defaults() *config {
 		writeTimeout: 5 * time.Second,
 		maxInFlight:  DefaultMaxInFlight,
 		dialer:       &net.Dialer{},
-		usetOp:       OpUReq,
+		usetOp:       OpUSet,
 	}
 }
 
@@ -175,7 +177,7 @@ func newClient(conn net.Conn, cfg *config) *Client {
 		usetOp:       cfg.usetOp,
 	}
 	if c.usetOp == 0 {
-		c.usetOp = OpUReq
+		c.usetOp = OpUSet
 	}
 	if cfg.maxInFlight > 0 {
 		c.sem = make(chan struct{}, cfg.maxInFlight)
@@ -284,11 +286,11 @@ func (c *Client) Set(ctx context.Context, unit Addr, cmdID uint32, v Value) (Val
 
 	var msg Message
 	if c.mode == Unconnected {
-		// Best-guess unconnected SET: the configured opcode (default 0x0b, the
-		// read-request opcode) carrying the value body in the same layout as the
-		// captured 0x0c reply (cmd u16, dataType u16, reserved u32, value).
-		// UNCONFIRMED (no write was captured) - the blast verify-and-retry flags
-		// it if the device doesn't apply it; try another opcode via config if so.
+		// Unconnected SET: opcode 0x10 (OpUSet) carrying cmd(u16) + the value in
+		// the unconnected layout (int: dataType u16 + u32 value, no reserved word;
+		// string: dataType u16 + reserved u32 + NUL ASCII). Confirmed byte-for-byte
+		// against a rolltrak write capture (2026-06-18): 10 00 <cmd> <dataType>
+		// <value>. The opcode stays configurable via WithUnconnectedSetOpcode.
 		body := binary.BigEndian.AppendUint16(nil, uint16(cmdID))
 		body = append(body, v.encodeUnconnected()...)
 		msg = Message{Dst: unit, Src: c.self, Opcode: c.usetOp, Raw: body}
@@ -456,6 +458,7 @@ func (c *Client) deliver(k replyKey, m Message) bool {
 
 func (c *Client) write(m Message) error {
 	b := m.Encode()
+	traceFrame("SEND", b)
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
 	if c.writeTimeout > 0 {
@@ -463,6 +466,41 @@ func (c *Client) write(m Message) error {
 	}
 	_, err := c.conn.Write(b)
 	return err
+}
+
+// --- optional wire trace -----------------------------------------------------
+//
+// When enabled, every frame the Client sends/receives is dumped as a hex line
+// ("SEND <hex>" / "RECV <hex>"), in the same format the rcprobe capture proxy
+// prints, so Demeter's own byte stream can be diffed against a rolltrak capture
+// to find why a write doesn't apply. Enable via SetWireTrace (the app wires it to
+// the ROLLCALL_WIRETRACE env var). Disabled = one atomic load, no allocation.
+
+type wireSink struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+var wireTrace atomic.Pointer[wireSink]
+
+// SetWireTrace routes a hex dump of every sent/received frame to w (nil disables).
+// Safe for concurrent use.
+func SetWireTrace(w io.Writer) {
+	if w == nil {
+		wireTrace.Store(nil)
+		return
+	}
+	wireTrace.Store(&wireSink{w: w})
+}
+
+func traceFrame(dir string, b []byte) {
+	s := wireTrace.Load()
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	fmt.Fprintf(s.w, "%s %s\n", dir, hex.EncodeToString(b))
+	s.mu.Unlock()
 }
 
 func (c *Client) readLoop() {
@@ -540,6 +578,7 @@ func readMessage(r *bufio.Reader) (Message, error) {
 	if _, err := io.ReadFull(r, full[4:]); err != nil {
 		return Message{}, err
 	}
+	traceFrame("RECV", full)
 	m, _, err := Decode(full)
 	return m, err
 }

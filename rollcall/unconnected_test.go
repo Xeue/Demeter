@@ -114,9 +114,9 @@ func TestUnconnectedFrameAddressReply(t *testing.T) {
 	}
 }
 
-// TestClientUnconnectedSetEchoes: a unconnected SET (best-guess opcode 0x0b with
-// a value body) round-trips - the fake frame echoes the value in a 0x0c reply and
-// Set returns it (this is what the blast verify-and-retry checks against).
+// TestClientUnconnectedSetEchoes: an unconnected SET (opcode 0x10, confirmed via
+// capture) round-trips - the fake frame echoes the value in a 0x0c reply and Set
+// returns it (this is what the blast verify-and-retry checks against).
 func TestClientUnconnectedSetEchoes(t *testing.T) {
 	cliConn, srvConn := net.Pipe()
 	go func() {
@@ -127,10 +127,10 @@ func TestClientUnconnectedSetEchoes(t *testing.T) {
 			if err != nil {
 				return
 			}
-			if req.Opcode != OpUReq {
-				continue // ignore the login
+			if req.Opcode != OpUSet {
+				continue // ignore the login (0x15) and reads (0x0b)
 			}
-			// A SET carries a value (Kind != None); echo it back as a 0x0c reply.
+			// A SET echoes its value back as a 0x0c reply.
 			reply := Message{Dst: req.Src, Src: req.Dst, Opcode: OpUReply, CmdID: req.CmdID, Value: req.Value}
 			if _, err := srvConn.Write(reply.Encode()); err != nil {
 				return
@@ -149,6 +149,57 @@ func TestClientUnconnectedSetEchoes(t *testing.T) {
 	}
 	if got.Kind != KindString || got.Str != "10.0.0.99" {
 		t.Errorf("echoed value = %s, want str(10.0.0.99)", got)
+	}
+}
+
+// TestWireTraceDumpsFrames: SetWireTrace dumps each sent frame as "SEND <hex>",
+// in the same format the rcprobe capture proxy prints, so Demeter's bytes can be
+// diffed against a rolltrak capture.
+func TestWireTraceDumpsFrames(t *testing.T) {
+	var buf bytes.Buffer
+	SetWireTrace(&buf)
+	defer SetWireTrace(nil)
+
+	cliConn, srvConn := net.Pipe()
+	go func() {
+		defer srvConn.Close()
+		br := bufio.NewReader(srvConn)
+		for {
+			req, err := readMessage(br)
+			if err != nil {
+				return
+			}
+			if req.Opcode != OpUSet {
+				continue
+			}
+			reply := Message{Dst: req.Src, Src: req.Dst, Opcode: OpUReply, CmdID: req.CmdID, Value: req.Value}
+			srvConn.Write(reply.Encode())
+		}
+	}()
+	c := NewConn(cliConn, WithMode(Unconnected))
+	defer c.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := c.Set(ctx, UnitAddr(0x12, 0x05), 4114, Int(1)); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	// The exact SET bytes (matches TestUnconnectedSetBytesMatchCapture) must appear.
+	want := "SEND 000c00180000120500000000000000ff000a10001012000100000001"
+	if !bytes.Contains(buf.Bytes(), []byte(want)) {
+		t.Errorf("wire trace missing the SET frame.\n got:\n%s\n want a line: %s", buf.String(), want)
+	}
+}
+
+// TestUnconnectedSetBytesMatchCapture pins the unconnected SET to the exact bytes
+// captured from rolltrak (the known-good writer) on 2026-06-18: SET cmd 4114
+// (0x1012) int 1 at unit 0x1205, opcode 0x10, body cmd(u16)|dataType(u16)|u32.
+func TestUnconnectedSetBytesMatchCapture(t *testing.T) {
+	want := frame("0000120500000000000000ff000a10001012000100000001")
+	body := binary.BigEndian.AppendUint16(nil, uint16(4114))
+	body = append(body, Int(1).encodeUnconnected()...)
+	got := Message{Dst: UnitAddr(0x12, 0x05), Src: Addr{Net: 0, Unit: 0, Port: 0x00ff}, Opcode: OpUSet, Raw: body}.Encode()
+	if !bytes.Equal(got, want) {
+		t.Errorf("set bytes:\n got  %x\n want %x", got, want)
 	}
 }
 

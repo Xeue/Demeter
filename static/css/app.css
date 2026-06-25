@@ -100,9 +100,13 @@ nav .navbar-text { color: var(--muted) !important; font-size: 12.5px; padding: 0
 .railItem { display: flex; align-items: center; gap: 10px; padding: 8px 9px; border-radius: 4px; cursor: pointer; border-left: 2px solid transparent; }
 .railItem:hover { background: #ffffff07; }
 .railItem.active { background: #ffffff0e; border-left-color: var(--accent); }
-.railItem .nm { font-weight: 550; }
-.railItem .ip { font-family: var(--mono); font-size: 11px; color: var(--faint); }
-.railItem .rt { margin-left: auto; }
+.railItem .railMeta { min-width: 0; }
+.railItem .nm { font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.railItem .ip { font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.railItem .grp { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 10.5px; color: var(--muted); margin-left: 7px; padding: 1px 6px; border-radius: 3px; background: var(--panel-3); border: 1px solid var(--border); vertical-align: middle; }
+.railItem .rt { margin-left: auto; flex: none; }
+.railItem .pushBadge { cursor: pointer; }
+.railItem .pushBadge:hover { filter: brightness(1.18); }
 .railFoot { padding: 9px 10px; border-top: 1px solid var(--border-soft); display: grid; gap: 6px; }
 .railFoot .addRow { display: grid; gap: 5px; }
 
@@ -131,9 +135,15 @@ nav .navbar-text { color: var(--muted) !important; font-size: 12.5px; padding: 0
 
 /* ---------- frame / slot / group containers ---------- */
 .frameCont > header {
-	display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+	display: flex; flex-direction: column; align-items: stretch; gap: 6px;
 	padding: 12px 14px; background: var(--panel); border-bottom: 1px solid var(--border);
 }
+/* toolbar row: title (pushed left via me-auto) + controls (right). Its width no
+   longer depends on the status text, so changing status never reflows it. */
+.frameHeadMain { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* status text on its own row below, with reserved height so it never jumps the
+   layout vertically as the text appears/disappears or changes length. */
+.frameHeadStatus { display: flex; align-items: center; gap: 10px; min-height: 16px; }
 .frameName { font-weight: 600; font-size: 15px; margin: 0; }
 .labelGroup { color: var(--muted); font-weight: 500; margin-left: 8px; font-size: 12.5px; }
 
@@ -296,3 +306,41 @@ header:has(.collapseHeader:checked) + .collapseSection { display: grid; padding-
 .spigotSub > header { padding-left: 12px; background: transparent; }
 .spigotSub > header .groupName { font-weight: 500; color: var(--muted); }
 .spigotSub .commandCont { padding-left: 14px; }
+
+/* DEBUG (temporary): rolltrak command hint icon at the end of a command row.
+   Remove this block when the debug feature is removed. */
+/* Give frame command rows a 6th column so the >_ icon sits at the row end
+   instead of wrapping onto a new line. Scoped to .slotCont so the group editor
+   rows (5 columns) are unaffected. */
+.slotCont .commandCont { grid-template-columns: 2.6rem 1.4fr 1.3fr 1.3fr 2fr auto; }
+.rolltrakDbg {
+	cursor: pointer;
+	opacity: .4;
+	font-family: var(--mono, monospace);
+	font-size: 12px;
+	padding: 0 8px;
+	user-select: none;
+	color: var(--muted);
+	align-self: center;
+	justify-self: end;
+	white-space: nowrap;
+}
+.rolltrakDbg:hover { opacity: 1; color: var(--accent); }
+.rolltrakDbg.open { opacity: 1; color: var(--accent); }
+/* The revealed command: full width on its own grid line, selectable. */
+.rolltrakOut {
+	grid-column: 1 / -1;
+	margin: 4px 0 2px;
+	padding: 8px 10px;
+	background: var(--head, #0d1117);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	color: var(--accent);
+	font-family: var(--mono, monospace);
+	font-size: 12px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	word-break: break-all;
+	user-select: text;
+	cursor: text;
+}

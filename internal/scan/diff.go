@@ -3,6 +3,7 @@ package scan
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strconv"
 	"time"
@@ -177,10 +178,28 @@ func (s *Scanner) doCommands(ctx context.Context, conns Conns, cmds map[string]s
 		if err := s.Pool.Acquire(ctx); err != nil {
 			return applied, failed
 		}
+		hasTake := false
+		for take := range takes {
+			if take != 0 {
+				hasTake = true
+				break
+			}
+		}
+
+		// 1. Stage the SETs. With a take, the written value is only staged (not
+		//    yet active) so its echo can't confirm anything - defer the verdict to
+		//    the post-take read-back. With no take it applies immediately, so the
+		//    echo check (with retries) is authoritative.
 		for _, op := range sets {
 			if ctx.Err() != nil {
 				s.Pool.Release()
 				return applied, failed
+			}
+			if hasTake {
+				if _, err := dev.Set(ctx, addr, slot, op.cmd, op.v); err != nil {
+					slog.Warn("staged SET failed", "frame", ip, "addr", addr, "slot", slot, "cmd", op.cmd, "err", err)
+				}
+				continue
 			}
 			ok, got, reason := s.setVerified(ctx, dev, addr, slot, op.cmd, op.v)
 			if ok {
@@ -192,11 +211,45 @@ func (s *Scanner) doCommands(ctx context.Context, conns Conns, cmds map[string]s
 				}
 			}
 		}
+
+		// 2. Fire the take(s) to commit the staged values. A take is a momentary
+		//    SET of the take command to 1; capture its error so a take the device
+		//    rejects is visible instead of silently swallowed.
+		var takeErr error
 		for take := range takes {
 			if take == 0 {
 				continue
 			}
-			_ = dev.Take(ctx, addr, slot, take)
+			if err := dev.Take(ctx, addr, slot, take); err != nil {
+				takeErr = err
+				slog.Warn("take/commit failed", "frame", ip, "addr", addr, "slot", slot, "take", take, "err", err)
+			}
+		}
+
+		// 3. Verify by read-back: a take-required setting is only ACTIVE once the
+		//    take commits it, so confirm each staged command actually holds the new
+		//    value now. This is the only reliable check that "set then take"
+		//    worked, and it corrects a SET echo that reported a staged-but-not-yet-
+		//    active value as applied (which would wrongly clear the pending flag).
+		if hasTake {
+			for _, op := range sets {
+				if ctx.Err() != nil {
+					s.Pool.Release()
+					return applied, failed
+				}
+				ok, got := s.verifyActive(ctx, dev, addr, slot, op.cmd, op.v)
+				switch {
+				case ok:
+					applied[op.command] = got
+					delete(failed, op.command)
+				case !got.IsNone():
+					applied[op.command] = got // device-actual; the row correctly stays pending
+					failed[op.command] = takeFailReason(takeErr, op.v, got)
+				default:
+					delete(applied, op.command)
+					failed[op.command] = takeFailReason(takeErr, op.v, model.None())
+				}
+			}
 		}
 		s.Pool.Release()
 	}
@@ -251,6 +304,47 @@ func (s *Scanner) setVerified(ctx context.Context, dev device.Device, addr, slot
 	// Rejected: `got` is the device's actual value (still != target), so active
 	// becomes reality and the row correctly stays pending.
 	return false, got, fmt.Sprintf("not applied after %d attempts (sent %s, device reports %s)", attempts, v.String(), got.String())
+}
+
+// verifyActive reads cmd back (retried up to VerifyAttempts) and reports whether
+// it now holds `want`. Unlike the SET echo, this confirms the value is ACTIVE on
+// the card - the only reliable check for a setting that only goes active after a
+// take/commit. Returns the last value read (None if every read errored).
+func (s *Scanner) verifyActive(ctx context.Context, dev device.Device, addr, slot string, cmd uint32, want model.Value) (bool, model.Value) {
+	attempts := s.verifyAttempts()
+	got := model.None()
+	for attempt := 1; attempt <= attempts; attempt++ {
+		if ctx.Err() != nil {
+			return false, got
+		}
+		if v, err := dev.Get(ctx, addr, slot, cmd); err == nil {
+			got = v
+			if model.ValuesEqualLoose(want, got) {
+				return true, got
+			}
+		}
+		if attempt < attempts {
+			select {
+			case <-time.After(s.verifyDelay()):
+			case <-ctx.Done():
+				return false, got
+			}
+		}
+	}
+	return false, got
+}
+
+// takeFailReason explains why a take-required SET is not active after the take,
+// distinguishing a take the device rejected from one that ran but didn't commit
+// the value (or a read-back that failed). Surfaced in slot.Failed for the UI.
+func takeFailReason(takeErr error, want, got model.Value) string {
+	if takeErr != nil {
+		return fmt.Sprintf("take/commit was rejected (%v); %s not applied", takeErr, want.String())
+	}
+	if got.IsNone() {
+		return fmt.Sprintf("could not read %s back after take to confirm it applied", want.String())
+	}
+	return fmt.Sprintf("set but not active after take (sent %s, device still reports %s)", want.String(), got.String())
 }
 
 // coerceDefault mirrors main.ts's `isNaN(parseFloat(value)) ? "value" : value`:
